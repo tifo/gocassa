@@ -160,8 +160,8 @@ For examples on how to do pagination or Update with this table, refer to the exa
 `MultiMapMultiKeyTable` can perform CRUD operations on rows filtered by equality of multiple fields (eg. read a sale based on their `city` , `sellerId` and `Id` of the sale):
 
 ```go
-    salePartitionKeys := []Sale{"City"}
-    saleClusteringKeys := []Sale{"SellerId","Id"}
+    salePartitionKeys := []string{"City"}
+    saleClusteringKeys := []string{"SellerId","Id"}
     salesTable := keySpace.MultimapMultiKeyTable("sale", salePartitionKeys, saleClusteringKeys, Sale{})
     // …
     result := Sale{}
