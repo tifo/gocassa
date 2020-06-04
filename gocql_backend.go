@@ -18,7 +18,7 @@ func (cb goCQLBackend) QueryWithOptions(opts Options, stmt Statement, scanner Sc
 		qu = qu.Consistency(*opts.Consistency)
 	}
 	if opts.Context != nil {
-		qu.WithContext(opts.Context)
+		qu = qu.WithContext(opts.Context)
 	}
 
 	iter := qu.Iter()
@@ -39,7 +39,7 @@ func (cb goCQLBackend) ExecuteWithOptions(opts Options, stmt Statement) error {
 		qu = qu.Consistency(*opts.Consistency)
 	}
 	if opts.Context != nil {
-		qu.WithContext(opts.Context)
+		qu = qu.WithContext(opts.Context)
 	}
 	return qu.Exec()
 }
