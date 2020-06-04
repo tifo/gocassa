@@ -62,7 +62,7 @@ func (cb goCQLBackend) ExecuteAtomicallyWithOptions(opts Options, stmts []Statem
 		batch.Cons = *opts.Consistency
 	}
 	if opts.Context != nil {
-		batch.WithContext(opts.Context)
+		batch = batch.WithContext(opts.Context)
 	}
 
 	return cb.session.ExecuteBatch(batch)
