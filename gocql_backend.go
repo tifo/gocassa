@@ -17,6 +17,9 @@ func (cb goCQLBackend) QueryWithOptions(opts Options, stmt Statement, scanner Sc
 	if opts.Consistency != nil {
 		qu = qu.Consistency(*opts.Consistency)
 	}
+	if opts.Context != nil {
+		qu.WithContext(opts.Context)
+	}
 
 	iter := qu.Iter()
 	if _, err := scanner.ScanIter(iter.Scanner()); err != nil {
@@ -34,6 +37,9 @@ func (cb goCQLBackend) ExecuteWithOptions(opts Options, stmt Statement) error {
 	qu := cb.session.Query(stmt.Query(), stmt.Values()...)
 	if opts.Consistency != nil {
 		qu = qu.Consistency(*opts.Consistency)
+	}
+	if opts.Context != nil {
+		qu.WithContext(opts.Context)
 	}
 	return qu.Exec()
 }
@@ -54,6 +60,9 @@ func (cb goCQLBackend) ExecuteAtomicallyWithOptions(opts Options, stmts []Statem
 
 	if opts.Consistency != nil {
 		batch.Cons = *opts.Consistency
+	}
+	if opts.Context != nil {
+		batch.WithContext(opts.Context)
 	}
 
 	return cb.session.ExecuteBatch(batch)
