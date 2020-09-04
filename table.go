@@ -3,6 +3,7 @@ package gocassa
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -124,6 +125,25 @@ func transformFields(m map[string]interface{}) {
 	}
 }
 
+// allFieldValuesAreNullable checks if all the fields passed in contain
+// items that will eventually be marked in Cassandra as null (so we can
+// better predict if we should do an INSERT or an UPSERT). This is to
+// protect against https://issues.apache.org/jira/browse/CASSANDRA-11805
+func allFieldValuesAreNullable(fields map[string]interface{}) bool {
+	for _, value := range fields {
+		rv := reflect.ValueOf(value)
+		switch rv.Kind() {
+		case reflect.Array, reflect.Slice, reflect.Map:
+			if rv.Len() > 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // INSERT INTO Hollywood.NerdMovies (user_uuid, fan)
 //   VALUES ('cfd66ccc-d857-4e90-b1e5-df98a3d40cd6', 'johndoe')
 //
@@ -161,10 +181,8 @@ func (t t) Set(i interface{}) Op {
 	}
 	ks := append(t.info.keys.PartitionKeys, t.info.keys.ClusteringColumns...)
 	updFields := removeFields(m, ks)
-	if len(updFields) == 0 {
-		return newWriteOp(t.keySpace.qe, filter{
-			t: t,
-		}, insertOpType, m)
+	if len(updFields) == 0 || allFieldValuesAreNullable(updFields) {
+		return newWriteOp(t.keySpace.qe, filter{t: t}, insertOpType, m)
 	}
 	transformFields(updFields)
 	rels := relations(t.info.keys, m)

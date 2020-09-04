@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gocql/gocql"
+	"github.com/stretchr/testify/assert"
 )
 
 func createIf(cs TableChanger, tes *testing.T) {
@@ -350,4 +351,35 @@ func TestExecuteWithConsistency(t *testing.T) {
 	if resultOpts.Consistency != nil && *resultOpts.Consistency != cons {
 		t.Fatal(fmt.Sprint("Expected consistency:", cons, "got:", resultOpts.Consistency))
 	}
+}
+
+func TestAllFieldValuesAreNullable(t *testing.T) {
+	// all collection types defined are nullable
+	assert.True(t, allFieldValuesAreNullable(map[string]interface{}{
+		"field1": []byte{},
+		"field2": map[string]string{},
+		"field3": [0]int{},
+	}))
+
+	// not nullable due to populated byte array
+	assert.False(t, allFieldValuesAreNullable(map[string]interface{}{
+		"field1": []byte{0x00},
+		"field2": map[string]string{},
+		"field3": [0]int{},
+	}))
+
+	// not nullable due to string
+	assert.False(t, allFieldValuesAreNullable(map[string]interface{}{
+		"field1": []byte{},
+		"field4": "",
+	}))
+
+	// not nullable due to int
+	assert.False(t, allFieldValuesAreNullable(map[string]interface{}{
+		"field2": map[string]string{},
+		"field5": 0,
+	}))
+
+	// the empty field list is nullable
+	assert.True(t, allFieldValuesAreNullable(map[string]interface{}{}))
 }
