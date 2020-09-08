@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gocql/gocql"
+	"github.com/stretchr/testify/assert"
 )
 
 func createIf(cs TableChanger, tes *testing.T) {
@@ -271,32 +272,35 @@ func TestKeysCreation(t *testing.T) {
 
 // Mock QueryExecutor that keeps track of options passed to it
 type OptionCheckingQE struct {
+	stmt Statement
 	opts *Options
 }
 
-func (qe OptionCheckingQE) QueryWithOptions(opts Options, stmt Statement, scanner Scanner) error {
+func (qe *OptionCheckingQE) QueryWithOptions(opts Options, stmt Statement, scanner Scanner) error {
+	qe.stmt = stmt
 	qe.opts.Consistency = opts.Consistency
 	return nil
 }
 
-func (qe OptionCheckingQE) Query(stmt Statement, scanner Scanner) error {
+func (qe *OptionCheckingQE) Query(stmt Statement, scanner Scanner) error {
 	return qe.QueryWithOptions(Options{}, stmt, scanner)
 }
 
-func (qe OptionCheckingQE) ExecuteWithOptions(opts Options, stmt Statement) error {
+func (qe *OptionCheckingQE) ExecuteWithOptions(opts Options, stmt Statement) error {
+	qe.stmt = stmt
 	qe.opts.Consistency = opts.Consistency
 	return nil
 }
 
-func (qe OptionCheckingQE) Execute(stmt Statement) error {
+func (qe *OptionCheckingQE) Execute(stmt Statement) error {
 	return qe.ExecuteWithOptions(Options{}, stmt)
 }
 
-func (qe OptionCheckingQE) ExecuteAtomically(stmt []Statement) error {
+func (qe *OptionCheckingQE) ExecuteAtomically(stmt []Statement) error {
 	return nil
 }
 
-func (qe OptionCheckingQE) ExecuteAtomicallyWithOptions(opts Options, stmt []Statement) error {
+func (qe *OptionCheckingQE) ExecuteAtomicallyWithOptions(opts Options, stmt []Statement) error {
 	qe.opts.Consistency = opts.Consistency
 	return nil
 }
@@ -306,7 +310,7 @@ func TestQueryWithConsistency(t *testing.T) {
 	// query executor and make sure the right options get passed
 	// through
 	resultOpts := Options{}
-	qe := OptionCheckingQE{opts: &resultOpts}
+	qe := &OptionCheckingQE{opts: &resultOpts}
 	conn := &connection{q: qe}
 	ks := conn.KeySpace("some ks")
 	cs := ks.Table("customerWithConsistency", Customer{}, Keys{PartitionKeys: []string{"Id"}})
@@ -329,7 +333,7 @@ func TestQueryWithConsistency(t *testing.T) {
 
 func TestExecuteWithConsistency(t *testing.T) {
 	resultOpts := Options{}
-	qe := OptionCheckingQE{opts: &resultOpts}
+	qe := &OptionCheckingQE{opts: &resultOpts}
 	conn := &connection{q: qe}
 	ks := conn.KeySpace("some ks")
 	cs := ks.Table("customerWithConsistency2", Customer{}, Keys{PartitionKeys: []string{"Id"}})
@@ -350,4 +354,95 @@ func TestExecuteWithConsistency(t *testing.T) {
 	if resultOpts.Consistency != nil && *resultOpts.Consistency != cons {
 		t.Fatal(fmt.Sprint("Expected consistency:", cons, "got:", resultOpts.Consistency))
 	}
+}
+
+func TestExecuteWithNullableFields(t *testing.T) {
+	type UserBasic struct {
+		Id   	 string
+		Metadata []byte
+	}
+
+	qe := &OptionCheckingQE{opts: &Options{}}
+	conn := &connection{q: qe}
+	ks := conn.KeySpace("user")
+	cs := ks.Table("user", UserBasic{}, Keys{PartitionKeys: []string{"Id"}}).
+		WithOptions(Options{TableName: "user_by_id"})
+
+	// inserting primary key (ID) only (with a nullable field)
+	err := cs.Set(UserBasic{Id: "100"}).Run()
+	assert.NoError(t, err)
+	assert.Equal(t, "INSERT INTO user.user_by_id (id, metadata) VALUES (?, ?)", qe.stmt.Query())
+
+	// upserting with metadata set
+	err = cs.Set(UserBasic{Id: "100", Metadata: []byte{0x02}}).Run()
+	assert.NoError(t, err)
+	assert.Equal(t, "UPDATE user.user_by_id SET metadata = ? WHERE id = ?", qe.stmt.Query())
+
+	// upserting with a non-nullable field
+	type UserWithPhone struct {
+		Id   	    string
+		PhoneNumber *string
+		Metadata    []byte
+	}
+	cs = ks.Table("user", UserWithPhone{}, Keys{PartitionKeys: []string{"Id"}}).
+		WithOptions(Options{TableName: "user_by_id"})
+	err = cs.Set(UserWithPhone{Id: "100", PhoneNumber: nil}).Run()
+	assert.NoError(t, err)
+	assert.Equal(t, "UPDATE user.user_by_id SET metadata = ?, phonenumber = ? WHERE id = ?", qe.stmt.Query())
+
+	number := "01189998819991197253"
+	err = cs.Set(UserWithPhone{Id: "100", PhoneNumber: &number}).Run()
+	assert.NoError(t, err)
+	assert.Equal(t, "UPDATE user.user_by_id SET metadata = ?, phonenumber = ? WHERE id = ?", qe.stmt.Query())
+
+	type UserWithName struct {
+		Id   	    string
+		Name        string
+		Metadata    []byte
+		Status 		map[string]string
+	}
+	cs = ks.Table("user", UserWithName{}, Keys{
+		PartitionKeys: []string{"Id"}, ClusteringColumns: []string{"Name"}}).
+		WithOptions(Options{TableName: "user_by_id"})
+
+	// inserting with all nullable fields not set
+	err = cs.Set(UserWithName{Id: "100", Name: "Moss"}).Run()
+	assert.NoError(t, err)
+	assert.Equal(t, "INSERT INTO user.user_by_id (id, metadata, name, status) VALUES (?, ?, ?, ?)", qe.stmt.Query())
+
+	// upserting with a nullable field actually set
+	err = cs.Set(UserWithName{Id: "100", Name: "Moss", Status: map[string]string{"foo": "bar"}}).Run()
+	assert.NoError(t, err)
+	assert.Equal(t, "UPDATE user.user_by_id SET metadata = ?, status = ? WHERE id = ? AND name = ?", qe.stmt.Query())
+}
+
+func TestAllFieldValuesAreNullable(t *testing.T) {
+	// all collection types defined are nullable
+	assert.True(t, allFieldValuesAreNullable(map[string]interface{}{
+		"field1": []byte{},
+		"field2": map[string]string{},
+		"field3": [0]int{},
+	}))
+
+	// not nullable due to populated byte array
+	assert.False(t, allFieldValuesAreNullable(map[string]interface{}{
+		"field1": []byte{0x00},
+		"field2": map[string]string{},
+		"field3": [0]int{},
+	}))
+
+	// not nullable due to string
+	assert.False(t, allFieldValuesAreNullable(map[string]interface{}{
+		"field1": []byte{},
+		"field4": "",
+	}))
+
+	// not nullable due to int
+	assert.False(t, allFieldValuesAreNullable(map[string]interface{}{
+		"field2": map[string]string{},
+		"field5": 0,
+	}))
+
+	// the empty field list is nullable
+	assert.True(t, allFieldValuesAreNullable(map[string]interface{}{}))
 }
