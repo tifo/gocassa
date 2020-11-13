@@ -55,7 +55,7 @@ func (mo multiOp) RunAtomicallyWithContext(ctx context.Context) error {
 }
 
 func (mo multiOp) GenerateStatement() Statement {
-	return noOpStatement
+	return noOpStatement{}
 }
 
 func (mo multiOp) QueryExecutor() QueryExecutor {

@@ -109,7 +109,7 @@ func (o *singleOp) GenerateStatement() Statement {
 	case readOpType, singleReadOpType:
 		return o.generateRead(o.options)
 	}
-	return noOpStatement
+	return noOpStatement{}
 }
 
 func (o *singleOp) QueryExecutor() QueryExecutor {

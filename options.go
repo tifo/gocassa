@@ -32,6 +32,10 @@ type ClusteringOrderColumn struct {
 	Column    string
 }
 
+func (c ClusteringOrderColumn) Field() string {
+	return c.Column
+}
+
 // Options can contain table or statement specific options.
 // The reason for this is because statement specific (TTL, Limit) options make sense as table level options
 // (eg. have default TTL for every Update without specifying it all the time)

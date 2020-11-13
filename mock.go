@@ -73,7 +73,7 @@ func (m mockOp) RunAtomicallyWithContext(ctx context.Context) error {
 }
 
 func (m mockOp) GenerateStatement() Statement {
-	return noOpStatement
+	return noOpStatement{}
 }
 
 func (m mockOp) QueryExecutor() QueryExecutor {
@@ -115,7 +115,7 @@ func (mo mockMultiOp) RunAtomicallyWithContext(ctx context.Context) error {
 }
 
 func (mo mockMultiOp) GenerateStatement() Statement {
-	return noOpStatement
+	return noOpStatement{}
 }
 
 func (mo mockMultiOp) QueryExecutor() QueryExecutor {
@@ -411,7 +411,7 @@ func (t *MockTable) Create() error {
 }
 
 func (t *MockTable) CreateStatement() (Statement, error) {
-	return noOpStatement, nil
+	return noOpStatement{}, nil
 }
 
 func (t *MockTable) CreateIfNotExist() error {
@@ -419,7 +419,7 @@ func (t *MockTable) CreateIfNotExist() error {
 }
 
 func (t *MockTable) CreateIfNotExistStatement() (Statement, error) {
-	return noOpStatement, nil
+	return noOpStatement{}, nil
 }
 
 func (t *MockTable) Recreate() error {
