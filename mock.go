@@ -490,7 +490,7 @@ func (f *MockFilter) keysFromRelations(keyNames []string) ([]key, error) {
 			return nil, fmt.Errorf("Missing mandatory PRIMARY KEY part `%s`", keyName)
 		}
 
-		if relation.op != equality && !(lastKey && relation.op == in) {
+		if relation.cmpType != CmpEquality && !(lastKey && relation.cmpType == CmpIn) {
 			return nil, fmt.Errorf("Invalid use of PK `%s`", keyName)
 		}
 

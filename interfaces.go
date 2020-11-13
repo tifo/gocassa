@@ -275,7 +275,7 @@ type Op interface {
 	WithOptions(Options) Op
 	// Options lets you read the `Options` for this `Op`
 	Options() Options
-	// Preflight performs any pre-execution validation that confirms the op considers itself "valid".
+	// Preflight performs any pre-execution validation that confirms the cmpType considers itself "valid".
 	// NOTE: Run() and RunLoggedBatch() should call this method before execution, and abort if any errors are returned.
 	Preflight() error
 	// GenerateStatement generates the statement to perform the operation

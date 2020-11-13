@@ -8,35 +8,37 @@ import (
 )
 
 const (
-	equality = iota
-	in
-	greaterThan
-	greaterThanOrEquals
-	lesserThan
-	lesserThanOrEquals
+	// These comparison types represent the comparison types supported
+	// when generating a relation between a key and it's terms
+	CmpEquality            = iota // direct equality (foo = bar)
+	CmpIn                         // membership (foo IN (bar, bing, baz))
+	CmpGreaterThan                // larger than (foo > 1)
+	CmpGreaterThanOrEquals        // larger than or equal (foo >= 1)
+	CmpLesserThan                 // less than (foo < 1)
+	CmpLesserThanOrEquals         // less than or equal (foo <= 1)
 )
 
 type Relation struct {
-	op    int
-	key   string
-	terms []interface{}
+	cmpType int
+	key     string
+	terms   []interface{}
 }
 
 func (r Relation) cql() (string, []interface{}) {
 	ret := ""
 	key := strings.ToLower(r.key)
-	switch r.op {
-	case equality:
+	switch r.cmpType {
+	case CmpEquality:
 		ret = key + " = ?"
-	case in:
+	case CmpIn:
 		return key + " IN ?", r.terms
-	case greaterThan:
+	case CmpGreaterThan:
 		ret = key + " > ?"
-	case greaterThanOrEquals:
+	case CmpGreaterThanOrEquals:
 		ret = key + " >= ?"
-	case lesserThan:
+	case CmpLesserThan:
 		ret = key + " < ?"
-	case lesserThanOrEquals:
+	case CmpLesserThanOrEquals:
 		ret = key + " <= ?"
 	}
 	return ret, r.terms
@@ -82,22 +84,22 @@ func (r Relation) accept(i interface{}) bool {
 	var result bool
 	var err error
 
-	if r.op == equality || r.op == in {
+	if r.cmpType == CmpEquality || r.cmpType == CmpIn {
 		return anyEquals(i, r.terms)
 	}
 
 	a, b := convertToPrimitive(i), convertToPrimitive(r.terms[0])
 
-	switch r.op {
-	case greaterThan:
+	switch r.cmpType {
+	case CmpGreaterThan:
 		result, err = builtinGreaterThan(a, b)
-	case greaterThanOrEquals:
+	case CmpGreaterThanOrEquals:
 		result, err = builtinGreaterThan(a, b)
 		result = result || a == b
-	case lesserThanOrEquals:
+	case CmpLesserThanOrEquals:
 		result, err = builtinLessThan(a, b)
 		result = result || a == b
-	case lesserThan:
+	case CmpLesserThan:
 		result, err = builtinLessThan(a, b)
 	}
 
@@ -110,48 +112,48 @@ func toI(i interface{}) []interface{} {
 
 func Eq(key string, term interface{}) Relation {
 	return Relation{
-		op:    equality,
-		key:   key,
-		terms: toI(term),
+		cmpType: CmpEquality,
+		key:     key,
+		terms:   toI(term),
 	}
 }
 
 func In(key string, terms ...interface{}) Relation {
 	return Relation{
-		op:    in,
-		key:   key,
-		terms: terms,
+		cmpType: CmpIn,
+		key:     key,
+		terms:   terms,
 	}
 }
 
 func GT(key string, term interface{}) Relation {
 	return Relation{
-		op:    greaterThan,
-		key:   key,
-		terms: toI(term),
+		cmpType: CmpGreaterThan,
+		key:     key,
+		terms:   toI(term),
 	}
 }
 
 func GTE(key string, term interface{}) Relation {
 	return Relation{
-		op:    greaterThanOrEquals,
-		key:   key,
-		terms: toI(term),
+		cmpType: CmpGreaterThanOrEquals,
+		key:     key,
+		terms:   toI(term),
 	}
 }
 
 func LT(key string, term interface{}) Relation {
 	return Relation{
-		op:    lesserThan,
-		key:   key,
-		terms: toI(term),
+		cmpType: CmpLesserThan,
+		key:     key,
+		terms:   toI(term),
 	}
 }
 
 func LTE(key string, term interface{}) Relation {
 	return Relation{
-		op:    lesserThanOrEquals,
-		key:   key,
-		terms: toI(term),
+		cmpType: CmpLesserThanOrEquals,
+		key:     key,
+		terms:   toI(term),
 	}
 }
