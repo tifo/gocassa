@@ -201,14 +201,17 @@ type tableInfoMarshal struct {
 
 // Returns table names in a keyspace
 func (k *k) Tables() ([]string, error) {
-	const query = "SELECT table_name FROM system_schema.tables WHERE keyspace_name = ?"
-
 	if k.qe == nil {
 		return nil, fmt.Errorf("no query executor configured")
 	}
 
 	res := []tableInfoMarshal{}
-	stmt := newSelectStatement(query, []interface{}{k.name}, []string{"table_name"})
+	stmt := SelectStatement{
+		keyspace: "system_schema",
+		table:    "tables",
+		fields:   []string{"table_name"},
+		where:    []Relation{Eq("keyspace_name", k.name)},
+	}
 	err := k.qe.Query(stmt, newScanner(stmt, &res))
 	if err != nil {
 		return nil, err
@@ -236,7 +239,7 @@ func (k *k) Exists(cf string) (bool, error) {
 
 func (k *k) DropTable(cf string) error {
 	query := fmt.Sprintf("DROP TABLE IF EXISTS %s.%s", k.name, cf)
-	stmt := newStatement(query, []interface{}{})
+	stmt := cqlStatement{query: query}
 	return k.qe.Execute(stmt)
 }
 

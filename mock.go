@@ -607,8 +607,8 @@ func (q *MockFilter) Read(out interface{}) Op {
 			fieldNames = q.table.fields
 		}
 
-		stmt := newSelectStatement("", []interface{}{}, fieldNames)
-		iter := newMockIterator(result, stmt.FieldNames())
+		stmt := SelectStatement{keyspace: "mock", table: "mock", fields: fieldNames}
+		iter := newMockIterator(result, stmt.fields)
 		_, err = newScanner(stmt, out).ScanIter(iter)
 		return err
 	})
