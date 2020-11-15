@@ -1,10 +1,7 @@
 package gocassa
 
 import (
-	"bytes"
-	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 
 	r "github.com/monzo/gocassa/reflect"
@@ -48,18 +45,6 @@ func newTableInfo(keyspace, name string, keys Keys, entity interface{}, fieldSou
 	cinf.fields = fields
 	cinf.fieldValues = values
 	return cinf
-}
-
-// Since we cant have Map -> [(k, v)] we settle for Map -> ([k], [v])
-// #tuplelessLifeSucks
-func keyValues(m map[string]interface{}) ([]string, []interface{}) {
-	keys := []string{}
-	values := []interface{}{}
-	for _, k := range sortedKeys(m) {
-		keys = append(keys, k)
-		values = append(values, m[k])
-	}
-	return keys, values
 }
 
 func toMap(i interface{}) (m map[string]interface{}, ok bool) {
@@ -142,36 +127,6 @@ func allFieldValuesAreNullable(fields map[string]interface{}) bool {
 		}
 	}
 	return true
-}
-
-// INSERT INTO Hollywood.NerdMovies (user_uuid, fan)
-//   VALUES ('cfd66ccc-d857-4e90-b1e5-df98a3d40cd6', 'johndoe')
-//
-// Gotcha: primkey must be first
-func insertStatement(keySpaceName, cfName string, fields map[string]interface{}, opts Options) (string, []interface{}) {
-	fieldNames, vals := keyValues(fields)
-
-	placeHolders := make([]string, len(fieldNames))
-	lowerFieldNames := make([]string, len(fieldNames))
-	for i, v := range fieldNames {
-		placeHolders[i] = "?"
-		lowerFieldNames[i] = strings.ToLower(v)
-	}
-
-	buf := new(bytes.Buffer)
-	buf.WriteString(fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s)",
-		keySpaceName,
-		cfName,
-		strings.Join(lowerFieldNames, ", "),
-		strings.Join(placeHolders, ", ")))
-
-	// Apply options
-	if opts.TTL != 0 {
-		buf.WriteString(" USING TTL ? ")
-		vals = append(vals, strconv.FormatFloat(opts.TTL.Seconds(), 'f', 0, 64))
-	}
-
-	return buf.String(), vals
 }
 
 func (t t) Set(i interface{}) Op {
