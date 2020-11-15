@@ -1,6 +1,10 @@
 package gocassa
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 type statement struct {
 	fieldNames []string
@@ -83,6 +87,27 @@ type DeleteStatement struct {
 	where    []Relation // where filter clauses
 }
 
+// Query provides the CQL query string for a DELETE query
+func (s DeleteStatement) Query() string {
+	query, _ := s.queryAndValues()
+	return query
+}
+
+// Values provide the binding values for a DELETE query
+func (s DeleteStatement) Values() []interface{} {
+	_, values := s.queryAndValues()
+	return values
+}
+
+func (s DeleteStatement) queryAndValues() (string, []interface{}) {
+	whereCQL, whereValues := generateWhereCQL(s.where)
+	query := fmt.Sprintf("DELETE FROM %s.%s", s.keyspace, s.table)
+	if whereCQL != "" {
+		query += " WHERE " + whereCQL
+	}
+	return query, whereValues
+}
+
 // noOpStatement represents a statement that doesn't perform any specific
 // query. It's used internally for testing, satisfies the Statement interface
 type noOpStatement struct{}
@@ -90,3 +115,41 @@ type noOpStatement struct{}
 func (_ noOpStatement) Query() string { return "" }
 
 func (_ noOpStatement) Values() []interface{} { return []interface{}{} }
+
+// generateWhereCQL takes a list of relations and generates the CQL for
+// a WHERE clause
+func generateWhereCQL(rs []Relation) (string, []interface{}) {
+	clauses, values := make([]string, 0, len(rs)), make([]interface{}, 0, len(rs))
+	for _, relation := range rs {
+		clause, bindValue := generateRelationCQL(relation)
+		clauses = append(clauses, clause)
+		values = append(values, bindValue)
+	}
+
+	if len(clauses) == 0 {
+		return "", []interface{}{}
+	}
+	return strings.Join(clauses, " AND "), values
+}
+
+func generateRelationCQL(rel Relation) (string, interface{}) {
+	field := strings.ToLower(rel.Field())
+	switch rel.Comparator() {
+	case CmpEquality:
+		return field + " = ?", rel.Terms()[0]
+	case CmpIn:
+		return field + " IN ?", rel.Terms()
+	case CmpGreaterThan:
+		return field + " > ?", rel.Terms()[0]
+	case CmpGreaterThanOrEquals:
+		return field + " >= ?", rel.Terms()[0]
+	case CmpLesserThan:
+		return field + " < ?", rel.Terms()[0]
+	case CmpLesserThanOrEquals:
+		return field + " <= ?", rel.Terms()[0]
+	default:
+		// This represents an invalid Comparator and would only manifest
+		// if we've initialised a Relation incorrectly within this package
+		panic(fmt.Sprintf("unknown comparator %v", rel.Comparator()))
+	}
+}
