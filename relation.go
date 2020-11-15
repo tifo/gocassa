@@ -26,6 +26,9 @@ const (
 type Relation struct {
 	cmp   Comparator
 	field string
+	// terms represents the list of terms on the right hand side to match
+	// against. It is expected that all comparators except the CmpIn have
+	// exactly one term.
 	terms []interface{}
 }
 
