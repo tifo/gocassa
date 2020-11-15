@@ -45,6 +45,34 @@ func TestStatement(t *testing.T) {
 	}
 }
 
+func TestSelectStatement(t *testing.T) {
+	stmt := SelectStatement{keyspace: "ks1", table: "tbl1"}
+	stmt.fields = []string{"a", "b", "c"}
+	assert.Equal(t, "SELECT a, b, c FROM ks1.tbl1", stmt.Query())
+	assert.Equal(t, []interface{}{}, stmt.Values())
+
+	stmt.limit = 10
+	assert.Equal(t, "SELECT a, b, c FROM ks1.tbl1 LIMIT ?", stmt.Query())
+	assert.Equal(t, []interface{}{10}, stmt.Values())
+
+	stmt.order = []ClusteringOrderColumn{
+		{Column: "a", Direction: ASC},
+	}
+	assert.Equal(t, "SELECT a, b, c FROM ks1.tbl1 ORDER BY a ASC LIMIT ?", stmt.Query())
+	assert.Equal(t, []interface{}{10}, stmt.Values())
+
+	stmt.where = []Relation{
+		Eq("foo", "bar"),
+		In("baz", "bing"),
+	}
+	assert.Equal(t, "SELECT a, b, c FROM ks1.tbl1 WHERE foo = ? AND baz IN ? ORDER BY a ASC LIMIT ?", stmt.Query())
+	assert.Equal(t, []interface{}{"bar", []interface{}{"bing"}, 10}, stmt.Values())
+
+	stmt.allowFiltering = true
+	assert.Equal(t, "SELECT a, b, c FROM ks1.tbl1 WHERE foo = ? AND baz IN ? ORDER BY a ASC LIMIT ? ALLOW FILTERING", stmt.Query())
+	assert.Equal(t, []interface{}{"bar", []interface{}{"bing"}, 10}, stmt.Values())
+}
+
 func TestInsertStatement(t *testing.T) {
 	stmt := InsertStatement{keyspace: "ks1", table: "tbl1"}
 	stmt.fieldMap = map[string]interface{}{"a": "b"}
@@ -152,4 +180,20 @@ func TestGenerateRelationCQL(t *testing.T) {
 	assert.PanicsWithValue(t, "unknown comparator -1", func() {
 		stmt, value = generateRelationCQL(Relation{cmp: -1})
 	})
+}
+
+func TestGenerateOrderByCQL(t *testing.T) {
+	stmt := generateOrderByCQL([]ClusteringOrderColumn{})
+	assert.Equal(t, "", stmt)
+
+	stmt = generateOrderByCQL([]ClusteringOrderColumn{
+		{Column: "foo", Direction: ASC},
+	})
+	assert.Equal(t, "foo ASC", stmt)
+
+	stmt = generateOrderByCQL([]ClusteringOrderColumn{
+		{Column: "foo", Direction: ASC},
+		{Column: "bar", Direction: DESC},
+	})
+	assert.Equal(t, "foo ASC, bar DESC", stmt)
 }

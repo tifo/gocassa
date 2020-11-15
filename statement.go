@@ -58,6 +58,49 @@ type SelectStatement struct {
 	allowFiltering bool                    // whether we should allow filtering
 }
 
+// Query provides the CQL query string for an SELECT query
+func (s SelectStatement) Query() string {
+	query, _ := s.queryAndValues()
+	return query
+}
+
+// Values provide the binding values for an SELECT query
+func (s SelectStatement) Values() []interface{} {
+	_, values := s.queryAndValues()
+	return values
+}
+
+func (s SelectStatement) queryAndValues() (string, []interface{}) {
+	values := make([]interface{}, 0)
+	query := []string{
+		"SELECT",
+		strings.Join(s.fields, ", "),
+		fmt.Sprintf("FROM %s.%s", s.keyspace, s.table),
+	}
+
+	whereCQL, whereValues := generateWhereCQL(s.where)
+	if whereCQL != "" {
+		query = append(query, "WHERE", whereCQL)
+		values = append(values, whereValues...)
+	}
+
+	orderByCQL := generateOrderByCQL(s.order)
+	if orderByCQL != "" {
+		query = append(query, "ORDER BY", orderByCQL)
+	}
+
+	if s.limit > 0 {
+		query = append(query, "LIMIT ?")
+		values = append(values, s.limit)
+	}
+
+	if s.allowFiltering {
+		query = append(query, "ALLOW FILTERING")
+	}
+
+	return strings.Join(query, " "), values
+}
+
 // InsertStatement represents an INSERT query to write some data in C*
 // It satisfies the Statement interface
 type InsertStatement struct {
@@ -67,13 +110,13 @@ type InsertStatement struct {
 	ttl      time.Duration          // ttl of the row
 }
 
-// Query provides the CQL query string for an UPDATE query
+// Query provides the CQL query string for an INSERT INTO query
 func (s InsertStatement) Query() string {
 	query, _ := s.queryAndValues()
 	return query
 }
 
-// Values provide the binding values for an UPDATE query
+// Values provide the binding values for an INSERT INTO query
 func (s InsertStatement) Values() []interface{} {
 	_, values := s.queryAndValues()
 	return values
@@ -238,4 +281,16 @@ func generateRelationCQL(rel Relation) (string, interface{}) {
 		// if we've initialised a Relation incorrectly within this package
 		panic(fmt.Sprintf("unknown comparator %v", rel.Comparator()))
 	}
+}
+
+// generateOrderByCQL generates the CQL for the ORDER BY clause. An expected
+// output might look like:
+//	- foo ASC
+//  - foo ASC, bar DESC
+func generateOrderByCQL(order []ClusteringOrderColumn) string {
+	out := make([]string, 0, len(order))
+	for _, oc := range order {
+		out = append(out, oc.Column+" "+oc.Direction.String())
+	}
+	return strings.Join(out, ", ")
 }
