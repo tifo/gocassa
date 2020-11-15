@@ -20,17 +20,18 @@ type SelectStatement struct {
 
 // Query provides the CQL query string for an SELECT query
 func (s SelectStatement) Query() string {
-	query, _ := s.queryAndValues()
+	query, _ := s.QueryAndValues()
 	return query
 }
 
 // Values provide the binding values for an SELECT query
 func (s SelectStatement) Values() []interface{} {
-	_, values := s.queryAndValues()
+	_, values := s.QueryAndValues()
 	return values
 }
 
-func (s SelectStatement) queryAndValues() (string, []interface{}) {
+// QueryAndValues returns the CQL query and any bind values
+func (s SelectStatement) QueryAndValues() (string, []interface{}) {
 	values := make([]interface{}, 0)
 	query := []string{
 		"SELECT",
@@ -72,17 +73,18 @@ type InsertStatement struct {
 
 // Query provides the CQL query string for an INSERT INTO query
 func (s InsertStatement) Query() string {
-	query, _ := s.queryAndValues()
+	query, _ := s.QueryAndValues()
 	return query
 }
 
 // Values provide the binding values for an INSERT INTO query
 func (s InsertStatement) Values() []interface{} {
-	_, values := s.queryAndValues()
+	_, values := s.QueryAndValues()
 	return values
 }
 
-func (s InsertStatement) queryAndValues() (string, []interface{}) {
+// QueryAndValues returns the CQL query and any bind values
+func (s InsertStatement) QueryAndValues() (string, []interface{}) {
 	query := []string{"INSERT INTO", fmt.Sprintf("%s.%s", s.keyspace, s.table)}
 
 	fieldNames := make([]string, 0, len(s.fieldMap))
@@ -118,17 +120,18 @@ type UpdateStatement struct {
 
 // Query provides the CQL query string for an UPDATE query
 func (s UpdateStatement) Query() string {
-	query, _ := s.queryAndValues()
+	query, _ := s.QueryAndValues()
 	return query
 }
 
 // Values provide the binding values for an UPDATE query
 func (s UpdateStatement) Values() []interface{} {
-	_, values := s.queryAndValues()
+	_, values := s.QueryAndValues()
 	return values
 }
 
-func (s UpdateStatement) queryAndValues() (string, []interface{}) {
+// QueryAndValues returns the CQL query and any bind values
+func (s UpdateStatement) QueryAndValues() (string, []interface{}) {
 	values := make([]interface{}, 0)
 	query := []string{"UPDATE", fmt.Sprintf("%s.%s", s.keyspace, s.table)}
 
@@ -160,17 +163,18 @@ type DeleteStatement struct {
 
 // Query provides the CQL query string for a DELETE query
 func (s DeleteStatement) Query() string {
-	query, _ := s.queryAndValues()
+	query, _ := s.QueryAndValues()
 	return query
 }
 
 // Values provide the binding values for a DELETE query
 func (s DeleteStatement) Values() []interface{} {
-	_, values := s.queryAndValues()
+	_, values := s.QueryAndValues()
 	return values
 }
 
-func (s DeleteStatement) queryAndValues() (string, []interface{}) {
+// QueryAndValues returns the CQL query and any bind values
+func (s DeleteStatement) QueryAndValues() (string, []interface{}) {
 	whereCQL, whereValues := generateWhereCQL(s.where)
 	query := fmt.Sprintf("DELETE FROM %s.%s", s.keyspace, s.table)
 	if whereCQL != "" {
