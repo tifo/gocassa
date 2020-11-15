@@ -45,6 +45,21 @@ func TestStatement(t *testing.T) {
 	}
 }
 
+func TestInsertStatement(t *testing.T) {
+	stmt := InsertStatement{keyspace: "ks1", table: "tbl1"}
+	stmt.fieldMap = map[string]interface{}{"a": "b"}
+	assert.Equal(t, "INSERT INTO ks1.tbl1 (a) VALUES (?)", stmt.Query())
+	assert.Equal(t, []interface{}{"b"}, stmt.Values())
+
+	stmt.fieldMap = map[string]interface{}{"a": "b", "c": "d"}
+	assert.Equal(t, "INSERT INTO ks1.tbl1 (a, c) VALUES (?, ?)", stmt.Query())
+	assert.Equal(t, []interface{}{"b", "d"}, stmt.Values())
+
+	stmt.ttl = 1 * time.Hour
+	assert.Equal(t, "INSERT INTO ks1.tbl1 (a, c) VALUES (?, ?) USING TTL ?", stmt.Query())
+	assert.Equal(t, []interface{}{"b", "d", 3600}, stmt.Values())
+}
+
 func TestUpdateStatement(t *testing.T) {
 	stmt := UpdateStatement{keyspace: "ks1", table: "tbl1"}
 	stmt.fieldMap = map[string]interface{}{"a": "b"}

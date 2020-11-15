@@ -67,6 +67,42 @@ type InsertStatement struct {
 	ttl      time.Duration          // ttl of the row
 }
 
+// Query provides the CQL query string for an UPDATE query
+func (s InsertStatement) Query() string {
+	query, _ := s.queryAndValues()
+	return query
+}
+
+// Values provide the binding values for an UPDATE query
+func (s InsertStatement) Values() []interface{} {
+	_, values := s.queryAndValues()
+	return values
+}
+
+func (s InsertStatement) queryAndValues() (string, []interface{}) {
+	query := []string{"INSERT INTO", fmt.Sprintf("%s.%s", s.keyspace, s.table)}
+
+	fieldNames := make([]string, 0, len(s.fieldMap))
+	placeholders := make([]string, 0, len(s.fieldMap))
+	values := make([]interface{}, 0, len(s.fieldMap))
+	for _, field := range sortedKeys(s.fieldMap) {
+		fieldNames = append(fieldNames, strings.ToLower(field))
+		placeholders = append(placeholders, "?")
+		values = append(values, s.fieldMap[field])
+	}
+
+	query = append(query, "("+strings.Join(fieldNames, ", ")+")")
+	query = append(query, "VALUES ("+strings.Join(placeholders, ", ")+")")
+
+	// Determine if we need to set a TTL
+	if s.ttl > 0 {
+		query = append(query, "USING TTL ?")
+		values = append(values, int(s.ttl.Seconds()))
+	}
+
+	return strings.Join(query, " "), values
+}
+
 // UpdateStatement represents an UPDATE query to update some data in C*
 // It satisfies the Statement interface
 type UpdateStatement struct {
