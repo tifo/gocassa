@@ -36,8 +36,9 @@ func BenchmarkDecodeBlogSliceNoBody(b *testing.B) {
 	for i := 0; i < 20; i++ {
 		results[i] = m
 	}
-	stmt := newSelectStatement("", []interface{}{}, fieldNames)
-	iter := newMockIterator(results, stmt.FieldNames())
+
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	for i := 0; i < b.N; i++ {
 		res := []blogPost{}
@@ -84,8 +85,8 @@ func benchmarkBlogPostSingle(b *testing.B, postData []byte) {
 
 	fieldNames := sortedKeys(m)
 	results := []map[string]interface{}{m}
-	stmt := newSelectStatement("", []interface{}{}, fieldNames)
-	iter := newMockIterator(results, stmt.FieldNames())
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	for i := 0; i < b.N; i++ {
 		res := blogPost{}
@@ -126,8 +127,8 @@ func BenchmarkDecodeAlphaSlice(b *testing.B) {
 	for i := 0; i < 20; i++ {
 		results[i] = m
 	}
-	stmt := newSelectStatement("", []interface{}{}, fieldNames)
-	iter := newMockIterator(results, stmt.FieldNames())
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	for i := 0; i < b.N; i++ {
 		res := []alphaStruct{}
@@ -158,8 +159,8 @@ func BenchmarkDecodeAlphaStruct(b *testing.B) {
 
 	fieldNames := sortedKeys(m)
 	results := []map[string]interface{}{m}
-	stmt := newSelectStatement("", []interface{}{}, fieldNames)
-	iter := newMockIterator(results, stmt.FieldNames())
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	for i := 0; i < b.N; i++ {
 		res := alphaStruct{}
