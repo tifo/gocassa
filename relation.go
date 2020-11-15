@@ -7,33 +7,52 @@ import (
 	"time"
 )
 
+// Comparator represents a comparison operand
+type Comparator int
+
 const (
 	// These comparison types represent the comparison types supported
 	// when generating a relation between a field and it's terms
-	CmpEquality            = iota // direct equality (foo = bar)
-	CmpIn                         // membership (foo IN (bar, bing, baz))
-	CmpGreaterThan                // larger than (foo > 1)
-	CmpGreaterThanOrEquals        // larger than or equal (foo >= 1)
-	CmpLesserThan                 // less than (foo < 1)
-	CmpLesserThanOrEquals         // less than or equal (foo <= 1)
+	CmpEquality            Comparator = iota // direct equality (foo = bar)
+	CmpIn                                    // membership (foo IN (bar, bing, baz))
+	CmpGreaterThan                           // larger than (foo > 1)
+	CmpGreaterThanOrEquals                   // larger than or equal (foo >= 1)
+	CmpLesserThan                            // less than (foo < 1)
+	CmpLesserThanOrEquals                    // less than or equal (foo <= 1)
 )
 
 // Relation describes the comparison of a field against a list of terms
 // that need to satisfy a comparator
 type Relation struct {
-	cmpType int
-	field   string
-	terms   []interface{}
+	cmp   Comparator
+	field string
+	terms []interface{}
+}
+
+// Field provides the field name for this relation
+func (r Relation) Field() string {
+	return r.field
+}
+
+// Comparator provides the comparator for this relation
+func (r Relation) Comparator() Comparator {
+	return r.cmp
+}
+
+// Terms provides a list of values to compare against. A valid relation
+// will always have at least one term present
+func (r Relation) Terms() []interface{} {
+	return r.terms
 }
 
 func (r Relation) cql() (string, []interface{}) {
 	ret := ""
-	field := strings.ToLower(r.field)
-	switch r.cmpType {
+	field := strings.ToLower(r.Field())
+	switch r.Comparator() {
 	case CmpEquality:
 		ret = field + " = ?"
 	case CmpIn:
-		return field + " IN ?", r.terms
+		return field + " IN ?", r.Terms()
 	case CmpGreaterThan:
 		ret = field + " > ?"
 	case CmpGreaterThanOrEquals:
@@ -43,7 +62,7 @@ func (r Relation) cql() (string, []interface{}) {
 	case CmpLesserThanOrEquals:
 		ret = field + " <= ?"
 	}
-	return ret, r.terms
+	return ret, r.Terms()
 }
 
 func anyEquals(value interface{}, terms []interface{}) bool {
@@ -86,13 +105,13 @@ func (r Relation) accept(i interface{}) bool {
 	var result bool
 	var err error
 
-	if r.cmpType == CmpEquality || r.cmpType == CmpIn {
-		return anyEquals(i, r.terms)
+	if r.Comparator() == CmpEquality || r.Comparator() == CmpIn {
+		return anyEquals(i, r.Terms())
 	}
 
-	a, b := convertToPrimitive(i), convertToPrimitive(r.terms[0])
+	a, b := convertToPrimitive(i), convertToPrimitive(r.Terms()[0])
 
-	switch r.cmpType {
+	switch r.Comparator() {
 	case CmpGreaterThan:
 		result, err = builtinGreaterThan(a, b)
 	case CmpGreaterThanOrEquals:
@@ -114,48 +133,48 @@ func toI(i interface{}) []interface{} {
 
 func Eq(field string, term interface{}) Relation {
 	return Relation{
-		cmpType: CmpEquality,
-		field:   field,
-		terms:   toI(term),
+		cmp:   CmpEquality,
+		field: field,
+		terms: toI(term),
 	}
 }
 
 func In(field string, terms ...interface{}) Relation {
 	return Relation{
-		cmpType: CmpIn,
-		field:   field,
-		terms:   terms,
+		cmp:   CmpIn,
+		field: field,
+		terms: terms,
 	}
 }
 
 func GT(field string, term interface{}) Relation {
 	return Relation{
-		cmpType: CmpGreaterThan,
-		field:   field,
-		terms:   toI(term),
+		cmp:   CmpGreaterThan,
+		field: field,
+		terms: toI(term),
 	}
 }
 
 func GTE(field string, term interface{}) Relation {
 	return Relation{
-		cmpType: CmpGreaterThanOrEquals,
-		field:   field,
-		terms:   toI(term),
+		cmp:   CmpGreaterThanOrEquals,
+		field: field,
+		terms: toI(term),
 	}
 }
 
 func LT(field string, term interface{}) Relation {
 	return Relation{
-		cmpType: CmpLesserThan,
-		field:   field,
-		terms:   toI(term),
+		cmp:   CmpLesserThan,
+		field: field,
+		terms: toI(term),
 	}
 }
 
 func LTE(field string, term interface{}) Relation {
 	return Relation{
-		cmpType: CmpLesserThanOrEquals,
-		field:   field,
-		terms:   toI(term),
+		cmp:   CmpLesserThanOrEquals,
+		field: field,
+		terms: toI(term),
 	}
 }

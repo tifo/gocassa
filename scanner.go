@@ -287,7 +287,7 @@ func wrapPtrValue(ptr reflect.Value, target reflect.Type) reflect.Value {
 }
 
 // ignoreFieldType struct is for fields we want to ignore, we specify a custom
-// unmarshal type which literally is a no-cmpType and does nothing with this data.
+// unmarshal type which literally is a no-op and does nothing with this data.
 // In the future, maybe we can be smarter of only extracting fields which we
 // are able to unmarshal into our target struct and get rid of this
 type ignoreFieldType struct{}

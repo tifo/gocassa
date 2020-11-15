@@ -455,7 +455,7 @@ func (f *MockFilter) Relations() []Relation {
 
 func (f *MockFilter) rowMatch(row map[string]interface{}) bool {
 	for _, relation := range f.relations {
-		value := row[relation.field]
+		value := row[relation.Field()]
 		if !relation.accept(value) {
 			return false
 		}
@@ -467,7 +467,7 @@ func (f *MockFilter) fieldRelationMap() map[string]Relation {
 	result := map[string]Relation{}
 
 	for _, relation := range f.relations {
-		result[relation.field] = relation
+		result[relation.Field()] = relation
 	}
 
 	return result
@@ -490,15 +490,15 @@ func (f *MockFilter) fieldsFromRelations(fields []string) ([]key, error) {
 			return nil, fmt.Errorf("Missing mandatory PRIMARY KEY part `%s`", keyName)
 		}
 
-		if relation.cmpType != CmpEquality && !(lastKey && relation.cmpType == CmpIn) {
+		if relation.Comparator() != CmpEquality && !(lastKey && relation.Comparator() == CmpIn) {
 			return nil, fmt.Errorf("Invalid use of PK `%s`", keyName)
 		}
 
 		if !lastKey {
-			rowKey = rowKey.Append(keyName, relation.terms[0])
+			rowKey = rowKey.Append(keyName, relation.Terms()[0])
 		} else {
-			for _, term := range relation.terms {
-				result = append(result, rowKey.Append(relation.field, term))
+			for _, term := range relation.Terms() {
+				result = append(result, rowKey.Append(relation.Field(), term))
 			}
 		}
 	}

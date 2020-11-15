@@ -212,7 +212,7 @@ func generateWhere(rs []Relation) (string, []interface{}) {
 			}
 			s, v := r.cql()
 			buf.WriteString(s)
-			if r.cmpType == CmpIn {
+			if r.Comparator() == CmpIn {
 				vals = append(vals, v)
 				continue
 			}
