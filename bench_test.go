@@ -176,3 +176,18 @@ func BenchmarkDecodeAlphaStruct(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkStatementMapTable(b *testing.B) {
+	tbl := ns.MapTable("customer_bench", "Id", Customer{})
+
+	row := Customer{Id: "100", Name: "Joe"}
+	update := map[string]interface{}{"name": "Gary"}
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		tbl.Read(row.Id, nil).GenerateStatement()
+		tbl.Set(row).GenerateStatement()
+		tbl.Update(row.Id, update).GenerateStatement()
+		tbl.Delete(row.Id).GenerateStatement()
+	}
+}
