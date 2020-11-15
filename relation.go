@@ -9,7 +9,7 @@ import (
 
 const (
 	// These comparison types represent the comparison types supported
-	// when generating a relation between a key and it's terms
+	// when generating a relation between a field and it's terms
 	CmpEquality            = iota // direct equality (foo = bar)
 	CmpIn                         // membership (foo IN (bar, bing, baz))
 	CmpGreaterThan                // larger than (foo > 1)
@@ -18,28 +18,30 @@ const (
 	CmpLesserThanOrEquals         // less than or equal (foo <= 1)
 )
 
+// Relation describes the comparison of a field against a list of terms
+// that need to satisfy a comparator
 type Relation struct {
 	cmpType int
-	key     string
+	field   string
 	terms   []interface{}
 }
 
 func (r Relation) cql() (string, []interface{}) {
 	ret := ""
-	key := strings.ToLower(r.key)
+	field := strings.ToLower(r.field)
 	switch r.cmpType {
 	case CmpEquality:
-		ret = key + " = ?"
+		ret = field + " = ?"
 	case CmpIn:
-		return key + " IN ?", r.terms
+		return field + " IN ?", r.terms
 	case CmpGreaterThan:
-		ret = key + " > ?"
+		ret = field + " > ?"
 	case CmpGreaterThanOrEquals:
-		ret = key + " >= ?"
+		ret = field + " >= ?"
 	case CmpLesserThan:
-		ret = key + " < ?"
+		ret = field + " < ?"
 	case CmpLesserThanOrEquals:
-		ret = key + " <= ?"
+		ret = field + " <= ?"
 	}
 	return ret, r.terms
 }
@@ -110,50 +112,50 @@ func toI(i interface{}) []interface{} {
 	return []interface{}{i}
 }
 
-func Eq(key string, term interface{}) Relation {
+func Eq(field string, term interface{}) Relation {
 	return Relation{
 		cmpType: CmpEquality,
-		key:     key,
+		field:   field,
 		terms:   toI(term),
 	}
 }
 
-func In(key string, terms ...interface{}) Relation {
+func In(field string, terms ...interface{}) Relation {
 	return Relation{
 		cmpType: CmpIn,
-		key:     key,
+		field:   field,
 		terms:   terms,
 	}
 }
 
-func GT(key string, term interface{}) Relation {
+func GT(field string, term interface{}) Relation {
 	return Relation{
 		cmpType: CmpGreaterThan,
-		key:     key,
+		field:   field,
 		terms:   toI(term),
 	}
 }
 
-func GTE(key string, term interface{}) Relation {
+func GTE(field string, term interface{}) Relation {
 	return Relation{
 		cmpType: CmpGreaterThanOrEquals,
-		key:     key,
+		field:   field,
 		terms:   toI(term),
 	}
 }
 
-func LT(key string, term interface{}) Relation {
+func LT(field string, term interface{}) Relation {
 	return Relation{
 		cmpType: CmpLesserThan,
-		key:     key,
+		field:   field,
 		terms:   toI(term),
 	}
 }
 
-func LTE(key string, term interface{}) Relation {
+func LTE(field string, term interface{}) Relation {
 	return Relation{
 		cmpType: CmpLesserThanOrEquals,
-		key:     key,
+		field:   field,
 		terms:   toI(term),
 	}
 }

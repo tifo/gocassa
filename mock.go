@@ -455,7 +455,7 @@ func (f *MockFilter) Relations() []Relation {
 
 func (f *MockFilter) rowMatch(row map[string]interface{}) bool {
 	for _, relation := range f.relations {
-		value := row[relation.key]
+		value := row[relation.field]
 		if !relation.accept(value) {
 			return false
 		}
@@ -463,28 +463,28 @@ func (f *MockFilter) rowMatch(row map[string]interface{}) bool {
 	return true
 }
 
-func (f *MockFilter) keyRelationMap() map[string]Relation {
+func (f *MockFilter) fieldRelationMap() map[string]Relation {
 	result := map[string]Relation{}
 
 	for _, relation := range f.relations {
-		result[relation.key] = relation
+		result[relation.field] = relation
 	}
 
 	return result
 }
 
-func (f *MockFilter) keysFromRelations(keyNames []string) ([]key, error) {
-	keyRelationMap := f.keyRelationMap()
+func (f *MockFilter) fieldsFromRelations(fields []string) ([]key, error) {
+	fieldRelationMap := f.fieldRelationMap()
 	var rowKey key
 	var result []key
 
-	if len(keyNames) == 0 {
+	if len(fields) == 0 {
 		return []key{key{}}, nil
 	}
 
-	for i, keyName := range keyNames {
-		lastKey := i == len(keyNames)-1
-		relation, ok := keyRelationMap[keyName]
+	for i, keyName := range fields {
+		lastKey := i == len(fields)-1
+		relation, ok := fieldRelationMap[keyName]
 
 		if !ok {
 			return nil, fmt.Errorf("Missing mandatory PRIMARY KEY part `%s`", keyName)
@@ -498,7 +498,7 @@ func (f *MockFilter) keysFromRelations(keyNames []string) ([]key, error) {
 			rowKey = rowKey.Append(keyName, relation.terms[0])
 		} else {
 			for _, term := range relation.terms {
-				result = append(result, rowKey.Append(relation.key, term))
+				result = append(result, rowKey.Append(relation.field, term))
 			}
 		}
 	}
@@ -511,13 +511,13 @@ func (f *MockFilter) UpdateWithOptions(m map[string]interface{}, options Options
 		f.table.Lock()
 		defer f.table.Unlock()
 
-		rowKeys, err := f.keysFromRelations(f.table.keys.PartitionKeys)
+		rowKeys, err := f.fieldsFromRelations(f.table.keys.PartitionKeys)
 		if err != nil {
 			return err
 		}
 
 		for _, rowKey := range rowKeys {
-			superColumnKeys, err := f.keysFromRelations(f.table.keys.ClusteringColumns)
+			superColumnKeys, err := f.fieldsFromRelations(f.table.keys.ClusteringColumns)
 			if err != nil {
 				return err
 			}
@@ -550,7 +550,7 @@ func (f *MockFilter) Delete() Op {
 		f.table.Lock()
 		defer f.table.Unlock()
 
-		rowKeys, err := f.keysFromRelations(f.table.keys.PartitionKeys)
+		rowKeys, err := f.fieldsFromRelations(f.table.keys.PartitionKeys)
 		if err != nil {
 			return err
 		}
@@ -618,7 +618,7 @@ func (q *MockFilter) readSomeRows() ([]map[string]interface{}, error) {
 	q.table.mtx.RLock()
 	defer q.table.mtx.RUnlock()
 
-	rowKeys, err := q.keysFromRelations(q.table.keys.PartitionKeys)
+	rowKeys, err := q.fieldsFromRelations(q.table.keys.PartitionKeys)
 	if err != nil {
 		return nil, err
 	}
