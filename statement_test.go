@@ -2,6 +2,7 @@ package gocassa
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -44,9 +45,36 @@ func TestStatement(t *testing.T) {
 	}
 }
 
+func TestUpdateStatement(t *testing.T) {
+	stmt := UpdateStatement{keyspace: "ks1", table: "tbl1"}
+	stmt.fieldMap = map[string]interface{}{"a": "b"}
+	assert.Equal(t, "UPDATE ks1.tbl1 SET a = ?", stmt.Query())
+	assert.Equal(t, []interface{}{"b"}, stmt.Values())
+
+	stmt.fieldMap = map[string]interface{}{"a": "b", "c": ListAppend("d")}
+	assert.Equal(t, "UPDATE ks1.tbl1 SET a = ?, c = c + ?", stmt.Query())
+	assert.Equal(t, []interface{}{"b", []interface{}{"d"}}, stmt.Values())
+
+	stmt.fieldMap = map[string]interface{}{"a": "b", "c": "d"}
+	assert.Equal(t, "UPDATE ks1.tbl1 SET a = ?, c = ?", stmt.Query())
+	assert.Equal(t, []interface{}{"b", "d"}, stmt.Values())
+
+	stmt.where = []Relation{
+		Eq("foo", "bar"),
+		In("baz", "a", "b", "c"),
+	}
+	assert.Equal(t, "UPDATE ks1.tbl1 SET a = ?, c = ? WHERE foo = ? AND baz IN ?", stmt.Query())
+	assert.Equal(t, []interface{}{"b", "d", "bar", []interface{}{"a", "b", "c"}}, stmt.Values())
+
+	stmt.ttl = 1 * time.Hour
+	assert.Equal(t, "UPDATE ks1.tbl1 USING TTL ? SET a = ?, c = ? WHERE foo = ? AND baz IN ?", stmt.Query())
+	assert.Equal(t, []interface{}{3600, "b", "d", "bar", []interface{}{"a", "b", "c"}}, stmt.Values())
+}
+
 func TestDeleteStatement(t *testing.T) {
 	stmt := DeleteStatement{keyspace: "ks1", table: "tbl1"}
 	assert.Equal(t, "DELETE FROM ks1.tbl1", stmt.Query())
+	assert.Equal(t, []interface{}{}, stmt.Values())
 
 	stmt.where = []Relation{
 		Eq("foo", "bar"),

@@ -61,22 +61,54 @@ type SelectStatement struct {
 // InsertStatement represents an INSERT query to write some data in C*
 // It satisfies the Statement interface
 type InsertStatement struct {
-	keyspace string        // name of the keyspace
-	table    string        // name of the table
-	fields   []string      // fields to be inserted
-	values   []string      // values to be inserted
-	ttl      time.Duration // ttl of the row
+	keyspace string                 // name of the keyspace
+	table    string                 // name of the table
+	fieldMap map[string]interface{} // fields to be inserted
+	ttl      time.Duration          // ttl of the row
 }
 
 // UpdateStatement represents an UPDATE query to update some data in C*
 // It satisfies the Statement interface
 type UpdateStatement struct {
-	keyspace string        // name of the keyspace
-	table    string        // name of the table
-	fields   []string      // fields to be updated
-	values   []string      // values to be updated
-	where    []Relation    // where filter clauses
-	ttl      time.Duration // ttl of the row
+	keyspace string                 // name of the keyspace
+	table    string                 // name of the table
+	fieldMap map[string]interface{} // fields to be updated
+	where    []Relation             // where filter clauses
+	ttl      time.Duration          // ttl of the row
+}
+
+// Query provides the CQL query string for an UPDATE query
+func (s UpdateStatement) Query() string {
+	query, _ := s.queryAndValues()
+	return query
+}
+
+// Values provide the binding values for an UPDATE query
+func (s UpdateStatement) Values() []interface{} {
+	_, values := s.queryAndValues()
+	return values
+}
+
+func (s UpdateStatement) queryAndValues() (string, []interface{}) {
+	values := make([]interface{}, 0)
+	query := []string{"UPDATE", fmt.Sprintf("%s.%s", s.keyspace, s.table)}
+
+	// Determine if we need to set a TTL
+	if s.ttl > 0 {
+		query = append(query, "USING TTL ?")
+		values = append(values, int(s.ttl.Seconds()))
+	}
+
+	setCQL, setValues := generateUpdateSetCQL(s.fieldMap)
+	query = append(query, "SET", setCQL)
+	values = append(values, setValues...)
+
+	whereCQL, whereValues := generateWhereCQL(s.where)
+	if whereCQL != "" {
+		query = append(query, "WHERE", whereCQL)
+		values = append(values, whereValues...)
+	}
+	return strings.Join(query, " "), values
 }
 
 // DeleteStatement represents a DELETE query to delete some data in C*
@@ -116,18 +148,36 @@ func (_ noOpStatement) Query() string { return "" }
 
 func (_ noOpStatement) Values() []interface{} { return []interface{}{} }
 
+// generateUpdateSetCQL takes in a field map and generates the comma separated
+// SET syntax. An expected output may be something like:
+// 	- "foo = ?", {1}
+// 	- "foo = ?, bar = ?", {1, 2}
+func generateUpdateSetCQL(fm map[string]interface{}) (string, []interface{}) {
+	clauses, values := make([]string, 0, len(fm)), make([]interface{}, 0, len(fm))
+	for _, fieldName := range sortedKeys(fm) {
+		value := fm[fieldName]
+		if modifier, ok := value.(Modifier); ok {
+			stmt, vals := modifier.cql(fieldName)
+			clauses = append(clauses, stmt)
+			values = append(values, vals...)
+			continue
+		}
+		clauses = append(clauses, fieldName+" = ?")
+		values = append(values, value)
+	}
+	return strings.Join(clauses, ", "), values
+}
+
 // generateWhereCQL takes a list of relations and generates the CQL for
-// a WHERE clause
+// a WHERE clause. An expected output may be something like:
+//	- "foo = ?", {1}
+//	- "foo = ? AND bar IN ?", {1, {"a", "b", "c"}}
 func generateWhereCQL(rs []Relation) (string, []interface{}) {
 	clauses, values := make([]string, 0, len(rs)), make([]interface{}, 0, len(rs))
 	for _, relation := range rs {
 		clause, bindValue := generateRelationCQL(relation)
 		clauses = append(clauses, clause)
 		values = append(values, bindValue)
-	}
-
-	if len(clauses) == 0 {
-		return "", []interface{}{}
 	}
 	return strings.Join(clauses, " AND "), values
 }
