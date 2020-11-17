@@ -812,7 +812,7 @@ func assignRecords(m map[string]interface{}, record map[string]interface{}) erro
 		switch v := v.(type) {
 		case Modifier:
 			switch v.op {
-			case modifierMapSetField:
+			case ModifierMapSetField:
 				// Go interfaces are internally represented as a type and a value. The record[k] interface{} value could look like one of these:
 				// [type, value]
 				// [type, nil  ]
@@ -851,7 +851,7 @@ func assignRecords(m map[string]interface{}, record map[string]interface{}) erro
 				targetMap.SetMapIndex(key, value)
 
 				record[k] = targetMap.Interface()
-			case modifierMapSetFields:
+			case ModifierMapSetFields:
 				// Go interfaces are internally represented as a type and a value. The record[k] interface{} value could look like one of these:
 				// [type, value]
 				// [type, nil  ]
@@ -889,7 +889,7 @@ func assignRecords(m map[string]interface{}, record map[string]interface{}) erro
 					targetMap.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(v))
 				}
 				record[k] = targetMap.Interface()
-			case modifierCounterIncrement:
+			case ModifierCounterIncrement:
 				oldV, _ := record[k].(int64)
 				delta := int64(v.args[0].(int))
 

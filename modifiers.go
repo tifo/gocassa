@@ -7,25 +7,56 @@ import (
 
 // Modifiers are used with update statements.
 
+// ModifierOp represents a modifier operand
+type ModifierOp int
+
 const (
-	modifierListPrepend = iota
-	modifierListAppend
-	modifierListSetAtIndex
-	modifierListRemove
-	modifierMapSetFields
-	modifierMapSetField
-	modifierCounterIncrement
+	// These modifier types represent the field modification operations
+	// on list/map types such as append/remove/map set to be used with
+	// UPDATE CQL statements
+	ModifierListPrepend      ModifierOp = iota // prepend to beginning of a list
+	ModifierListAppend                         // append to the end of a list
+	ModifierListSetAtIndex                     //	set a value for a specific list index
+	ModifierListRemove                         // remove an item from the list
+	ModifierMapSetFields                       // set values from the provided map
+	ModifierMapSetField                        // update a value for a specific key
+	ModifierCounterIncrement                   // increment a counter
 )
 
 type Modifier struct {
-	op   int
+	op   ModifierOp
 	args []interface{}
+}
+
+// Operation returns the operation this modifier represents
+func (m Modifier) Operation() ModifierOp {
+	return m.op
+}
+
+// Args provides the arguments for this operation when generating the CQL statement,
+// the actual arguments will depend on the Operation that this modifier represents
+//   - ModifierListPrepend returns 1 element with the value (interface{})
+//     to be prepended
+//	 - ModifierListAppend returns 1 element with the value (interface{})
+//	   to be appended
+// 	 - ModifierListSetAtIndex returns two elements, the index (int) and
+//	   value (interface{}) to be set
+// 	 - ModifierListRemove returns 1 element with the value (interface{})
+//	   to be removed
+//   - ModifierMapSetFields returns 1 element with a map (map[string]interface{})
+//     with the keys and values to be set
+//   - MapSetField returns 2 elements, the key (string) and value (interface{})
+//     to be set in the underlying map
+//   - ModifierCounterIncrement returns 1 element (int) with how much the value
+//     should be incremented by (or decremented if the value is negative)
+func (m Modifier) Args() []interface{} {
+	return m.args
 }
 
 // ListPrepend prepends a value to the front of the list
 func ListPrepend(value interface{}) Modifier {
 	return Modifier{
-		op:   modifierListPrepend,
+		op:   ModifierListPrepend,
 		args: []interface{}{value},
 	}
 }
@@ -33,7 +64,7 @@ func ListPrepend(value interface{}) Modifier {
 // ListAppend appends a value to the end of the list
 func ListAppend(value interface{}) Modifier {
 	return Modifier{
-		op:   modifierListAppend,
+		op:   ModifierListAppend,
 		args: []interface{}{value},
 	}
 }
@@ -41,7 +72,7 @@ func ListAppend(value interface{}) Modifier {
 // ListSetAtIndex sets the list element at a given index to a given value
 func ListSetAtIndex(index int, value interface{}) Modifier {
 	return Modifier{
-		op:   modifierListSetAtIndex,
+		op:   ModifierListSetAtIndex,
 		args: []interface{}{index, value},
 	}
 }
@@ -49,7 +80,7 @@ func ListSetAtIndex(index int, value interface{}) Modifier {
 // ListRemove removes all elements from a list having a particular value
 func ListRemove(value interface{}) Modifier {
 	return Modifier{
-		op:   modifierListRemove,
+		op:   ModifierListRemove,
 		args: []interface{}{value},
 	}
 }
@@ -57,7 +88,7 @@ func ListRemove(value interface{}) Modifier {
 // MapSetFields updates the map with keys and values in the given map
 func MapSetFields(fields map[string]interface{}) Modifier {
 	return Modifier{
-		op:   modifierMapSetFields,
+		op:   ModifierMapSetFields,
 		args: []interface{}{fields},
 	}
 }
@@ -65,7 +96,7 @@ func MapSetFields(fields map[string]interface{}) Modifier {
 // MapSetField updates the map with the given key and value
 func MapSetField(key, value interface{}) Modifier {
 	return Modifier{
-		op:   modifierMapSetField,
+		op:   ModifierMapSetField,
 		args: []interface{}{key, value},
 	}
 }
@@ -74,7 +105,7 @@ func MapSetField(key, value interface{}) Modifier {
 // Negative value results in decrementing.
 func CounterIncrement(value int) Modifier {
 	return Modifier{
-		op:   modifierCounterIncrement,
+		op:   ModifierCounterIncrement,
 		args: []interface{}{value},
 	}
 }
@@ -83,19 +114,19 @@ func (m Modifier) cql(name string) (string, []interface{}) {
 	str := ""
 	vals := []interface{}{}
 	switch m.op {
-	case modifierListPrepend:
+	case ModifierListPrepend:
 		str = fmt.Sprintf("%s = ? + %s", name, name)
 		vals = append(vals, []interface{}{m.args[0]})
-	case modifierListAppend:
+	case ModifierListAppend:
 		str = fmt.Sprintf("%s = %s + ?", name, name)
 		vals = append(vals, []interface{}{m.args[0]})
-	case modifierListSetAtIndex:
+	case ModifierListSetAtIndex:
 		str = fmt.Sprintf("%s[?] = ?", name)
 		vals = append(vals, m.args[0], m.args[1])
-	case modifierListRemove:
+	case ModifierListRemove:
 		str = fmt.Sprintf("%s = %s - ?", name, name)
 		vals = append(vals, []interface{}{m.args[0]})
-	case modifierMapSetFields:
+	case ModifierMapSetFields:
 		fields, ok := m.args[0].(map[string]interface{})
 		if !ok {
 			panic(fmt.Sprintf("Argument for MapSetFields is not a map: %v", m.args[0]))
@@ -115,10 +146,10 @@ func (m Modifier) cql(name string) (string, []interface{}) {
 			i++
 		}
 		str = buf.String()
-	case modifierMapSetField:
+	case ModifierMapSetField:
 		str = fmt.Sprintf("%s[?] = ?", name)
 		vals = append(vals, m.args[0], m.args[1])
-	case modifierCounterIncrement:
+	case ModifierCounterIncrement:
 		val := m.args[0].(int)
 		if val > 0 {
 			str = fmt.Sprintf("%s = %s + ?", name, name)
