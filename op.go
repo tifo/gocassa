@@ -116,6 +116,7 @@ func (o *singleOp) generateSelect(opt Options) SelectStatement {
 		order:          mopt.ClusteringOrder,
 		limit:          mopt.Limit,
 		allowFiltering: mopt.AllowFiltering,
+		keys:           o.f.t.info.keys,
 	}
 }
 
@@ -126,6 +127,7 @@ func (o *singleOp) generateInsert(opt Options) InsertStatement {
 		table:    o.f.t.Name(),
 		fieldMap: o.m,
 		ttl:      mopt.TTL,
+		keys:     o.f.t.info.keys,
 	}
 }
 
@@ -137,6 +139,7 @@ func (o *singleOp) generateUpdate(opt Options) UpdateStatement {
 		fieldMap: o.m,
 		where:    o.f.rs,
 		ttl:      mopt.TTL,
+		keys:     o.f.t.info.keys,
 	}
 }
 
@@ -145,6 +148,7 @@ func (o *singleOp) generateDelete(opt Options) DeleteStatement {
 		keyspace: o.f.t.keySpace.name,
 		table:    o.f.t.Name(),
 		where:    o.f.rs,
+		keys:     o.f.t.info.keys,
 	}
 }
 
