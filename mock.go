@@ -165,7 +165,8 @@ func (mo mockMultiOp) Preflight() error {
 
 func (ks *mockKeySpace) NewTable(name string, entity interface{}, fieldSource map[string]interface{}, keys Keys) Table {
 	mt := &MockTable{
-		name:        name,
+		ksName:      ks.Name(),
+		tableName:   name,
 		entity:      entity,
 		keys:        keys,
 		fieldSource: fieldSource,
@@ -194,7 +195,8 @@ type MockTable struct {
 
 	// rows is mapping from row key to column group key to column map
 	mtx         *sync.RWMutex
-	name        string
+	ksName      string
+	tableName   string
 	rows        map[rowKey]*btree.BTree
 	entity      interface{}
 	fieldSource map[string]interface{}
@@ -339,7 +341,7 @@ func (t *MockTable) Name() string {
 	if len(t.options.TableName) > 0 {
 		return t.options.TableName
 	}
-	return t.name
+	return t.tableName
 }
 
 func (t *MockTable) getOrCreateRow(rowKey key) *btree.BTree {
@@ -428,7 +430,8 @@ func (t *MockTable) Recreate() error {
 
 func (t *MockTable) WithOptions(o Options) Table {
 	return &MockTable{
-		name:        t.name,
+		ksName:      t.ksName,
+		tableName:   t.tableName,
 		rows:        t.rows,
 		entity:      t.entity,
 		keys:        t.keys,
@@ -607,7 +610,7 @@ func (q *MockFilter) Read(out interface{}) Op {
 			fieldNames = q.table.fields
 		}
 
-		stmt := SelectStatement{keyspace: "mock", table: "mock", fields: fieldNames}
+		stmt := SelectStatement{keyspace: q.table.ksName, table: q.table.Name(), fields: fieldNames}
 		iter := newMockIterator(result, stmt.fields)
 		_, err = newScanner(stmt, out).ScanIter(iter)
 		return err
