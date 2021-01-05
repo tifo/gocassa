@@ -94,7 +94,7 @@ func createTableStmt(createStmt, keySpace, cf string, partitionKeys, colKeys []s
 
 	lines = append(lines, ";")
 	qry := strings.Join(lines, "\n")
-	return newStatement(qry, []interface{}{}), nil
+	return cqlStatement{query: qry}, nil
 }
 
 func j(s []string) string {

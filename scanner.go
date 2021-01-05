@@ -14,13 +14,13 @@ import (
 // iterator and is responsible for unmarshalling into the struct or slice
 // of structs provided.
 type scanner struct {
-	stmt statement
+	stmt SelectStatement
 
 	result      interface{}
 	rowsScanned int
 }
 
-func newScanner(stmt statement, result interface{}) *scanner {
+func newScanner(stmt SelectStatement, result interface{}) *scanner {
 	return &scanner{
 		stmt:        stmt,
 		result:      result,
@@ -130,8 +130,8 @@ func (s *scanner) iterSingle(iter Scannable) (int, error) {
 	return 1, nil
 }
 
-// structFields matches the statement field names selected to names of fields
-// within the target struct type
+// structFields matches the SelectStatement field names selected to names of
+// fields within the target struct type
 func (s *scanner) structFields(structType reflect.Type) ([]*r.Field, error) {
 	fmPtr := reflect.New(structType).Interface()
 	m, err := r.StructFieldMap(fmPtr, true)
@@ -139,8 +139,8 @@ func (s *scanner) structFields(structType reflect.Type) ([]*r.Field, error) {
 		return nil, fmt.Errorf("could not decode struct of type %T: %v", fmPtr, err)
 	}
 
-	structFields := make([]*r.Field, len(s.stmt.fieldNames))
-	for i, fieldName := range s.stmt.fieldNames {
+	structFields := make([]*r.Field, len(s.stmt.fields))
+	for i, fieldName := range s.stmt.fields {
 		field, ok := m[strings.ToLower(fieldName)]
 		if !ok { // the field doesn't have a destination
 			structFields[i] = nil

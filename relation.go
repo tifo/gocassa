@@ -3,7 +3,6 @@ package gocassa
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 )
 
@@ -26,6 +25,9 @@ const (
 type Relation struct {
 	cmp   Comparator
 	field string
+	// terms represents the list of terms on the right hand side to match
+	// against. It is expected that all comparators except the CmpIn have
+	// exactly one term.
 	terms []interface{}
 }
 
@@ -43,26 +45,6 @@ func (r Relation) Comparator() Comparator {
 // will always have at least one term present
 func (r Relation) Terms() []interface{} {
 	return r.terms
-}
-
-func (r Relation) cql() (string, []interface{}) {
-	ret := ""
-	field := strings.ToLower(r.Field())
-	switch r.Comparator() {
-	case CmpEquality:
-		ret = field + " = ?"
-	case CmpIn:
-		return field + " IN ?", r.Terms()
-	case CmpGreaterThan:
-		ret = field + " > ?"
-	case CmpGreaterThanOrEquals:
-		ret = field + " >= ?"
-	case CmpLesserThan:
-		ret = field + " < ?"
-	case CmpLesserThanOrEquals:
-		ret = field + " <= ?"
-	}
-	return ret, r.Terms()
 }
 
 func anyEquals(value interface{}, terms []interface{}) bool {

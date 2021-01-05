@@ -19,8 +19,9 @@ func TestScanIterSlice(t *testing.T) {
 		{"id": "acc_abcd2", "name": "Jane", "created": "2018-05-02 20:00:00+0000"},
 	}
 
-	stmt := newSelectStatement("", []interface{}{}, []string{"id", "name", "created"})
-	iter := newMockIterator(results, stmt.FieldNames())
+	fieldNames := []string{"id", "name", "created"}
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	expected := []Account{
 		{ID: "acc_abcd1", Name: "John"},
@@ -123,8 +124,9 @@ func TestScanIterStruct(t *testing.T) {
 		{"id": "acc_abcd2", "name": "Jane", "created": "2018-05-02 20:00:00+0000"},
 	}
 
-	stmt := newSelectStatement("", []interface{}{}, []string{"id", "name", "created"})
-	iter := newMockIterator(results, stmt.FieldNames())
+	fieldNames := []string{"id", "name", "created"}
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	expected := []Account{
 		{ID: "acc_abcd1", Name: "John"},
@@ -180,13 +182,13 @@ func TestScanIterStruct(t *testing.T) {
 
 	// Test for row not found
 	var f1 *Account
-	noResultsIter := newMockIterator([]map[string]interface{}{}, stmt.FieldNames())
+	noResultsIter := newMockIterator([]map[string]interface{}{}, stmt.fields)
 	rowsRead, err = newScanner(stmt, &f1).ScanIter(noResultsIter)
 	assert.EqualError(t, err, ":0: No rows returned")
 
 	// Test for a non-rows-not-found error
 	var g1 *Account
-	errorerIter := newMockIterator([]map[string]interface{}{}, stmt.FieldNames())
+	errorerIter := newMockIterator([]map[string]interface{}{}, stmt.fields)
 	errorScanner := newScanner(stmt, &g1)
 	expectedErr := fmt.Errorf("Something went baaaad")
 	errorerIter.err = expectedErr
@@ -201,8 +203,9 @@ func TestScanIterComposite(t *testing.T) {
 		{"id": "acc_abcd2", "name": "Jane", "created": "2018-05-02 20:00:00+0000"},
 	}
 
-	stmt := newSelectStatement("", []interface{}{}, []string{"id", "name", "metadata", "tags"})
-	iter := newMockIterator(results, stmt.FieldNames())
+	fieldNames := []string{"id", "name", "metadata", "tags"}
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	// Test decoding into a sturct with maps and slices
 	type metadataType map[string]string
@@ -232,8 +235,9 @@ func TestScanIterEmbedded(t *testing.T) {
 		{"id": "acc_abcd2", "name": "Jane", "created": "2018-05-02 20:00:00+0000"},
 	}
 
-	stmt := newSelectStatement("", []interface{}{}, []string{"id", "name", "created"})
-	iter := newMockIterator(results, stmt.FieldNames())
+	fieldNames := []string{"id", "name", "created"}
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	type embeddedStruct struct {
 		*Account

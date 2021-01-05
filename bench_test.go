@@ -36,8 +36,9 @@ func BenchmarkDecodeBlogSliceNoBody(b *testing.B) {
 	for i := 0; i < 20; i++ {
 		results[i] = m
 	}
-	stmt := newSelectStatement("", []interface{}{}, fieldNames)
-	iter := newMockIterator(results, stmt.FieldNames())
+
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	for i := 0; i < b.N; i++ {
 		res := []blogPost{}
@@ -84,8 +85,8 @@ func benchmarkBlogPostSingle(b *testing.B, postData []byte) {
 
 	fieldNames := sortedKeys(m)
 	results := []map[string]interface{}{m}
-	stmt := newSelectStatement("", []interface{}{}, fieldNames)
-	iter := newMockIterator(results, stmt.FieldNames())
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	for i := 0; i < b.N; i++ {
 		res := blogPost{}
@@ -126,8 +127,8 @@ func BenchmarkDecodeAlphaSlice(b *testing.B) {
 	for i := 0; i < 20; i++ {
 		results[i] = m
 	}
-	stmt := newSelectStatement("", []interface{}{}, fieldNames)
-	iter := newMockIterator(results, stmt.FieldNames())
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	for i := 0; i < b.N; i++ {
 		res := []alphaStruct{}
@@ -158,8 +159,8 @@ func BenchmarkDecodeAlphaStruct(b *testing.B) {
 
 	fieldNames := sortedKeys(m)
 	results := []map[string]interface{}{m}
-	stmt := newSelectStatement("", []interface{}{}, fieldNames)
-	iter := newMockIterator(results, stmt.FieldNames())
+	stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+	iter := newMockIterator(results, stmt.fields)
 
 	for i := 0; i < b.N; i++ {
 		res := alphaStruct{}
@@ -173,5 +174,20 @@ func BenchmarkDecodeAlphaStruct(b *testing.B) {
 		if res.A != "65" || res.H != 72 || res.O != float32(79) || res.V != float64(86) {
 			b.Fatalf("did not code result correctly, got %+v", res)
 		}
+	}
+}
+
+func BenchmarkStatementMapTable(b *testing.B) {
+	tbl := ns.MapTable("customer_bench", "Id", Customer{})
+
+	row := Customer{Id: "100", Name: "Joe"}
+	update := map[string]interface{}{"name": "Gary"}
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		tbl.Read(row.Id, nil).GenerateStatement()
+		tbl.Set(row).GenerateStatement()
+		tbl.Update(row.Id, update).GenerateStatement()
+		tbl.Delete(row.Id).GenerateStatement()
 	}
 }
