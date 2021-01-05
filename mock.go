@@ -242,8 +242,9 @@ func (t gocqlTypeInfo) Custom() string {
 }
 
 type keyPart struct {
-	Key   string
-	Value interface{}
+	Key             string
+	Value           interface{}
+	ClusteringOrder ColumnDirection
 }
 
 func (k *keyPart) Bytes() []byte {
@@ -265,6 +266,9 @@ func (k key) Less(other key) bool {
 		cmp := bytes.Compare(k[i].Bytes(), other[i].Bytes())
 		if cmp == 0 {
 			continue
+		}
+		if k[i].ClusteringOrder { // desc
+			return cmp > 0
 		}
 		return cmp < 0
 	}
@@ -289,7 +293,7 @@ func (k key) ToSuperColumn() *superColumn {
 func (k key) Append(column string, value interface{}) key {
 	newKey := make([]keyPart, len(k)+1)
 	copy(newKey, k)
-	newKey[len(k)] = keyPart{column, value}
+	newKey[len(k)] = keyPart{Key: column, Value: value}
 	return newKey
 }
 
@@ -358,6 +362,16 @@ func (t *MockTable) getOrCreateRow(rowKey key) *btree.BTree {
 func (t *MockTable) getOrCreateColumnGroup(rowKey, superColumnKey key) map[string]interface{} {
 	row := t.getOrCreateRow(rowKey)
 	scol := superColumnKey.ToSuperColumn()
+
+	// Retrieve the clustering order from the table options
+	// and assign to the key parts to set the sort ordering on each column
+	keyOrder := make(map[string]ColumnDirection, 0)
+	for _, v := range t.options.ClusteringOrder {
+		keyOrder[v.Column] = v.Direction
+	}
+	for i, kp := range scol.Key {
+		scol.Key[i].ClusteringOrder = keyOrder[kp.Key]
+	}
 
 	if row.Has(scol) {
 		return row.Get(scol).(*superColumn).Columns
