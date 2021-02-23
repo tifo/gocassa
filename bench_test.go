@@ -43,7 +43,7 @@ func BenchmarkDecodeBlogSliceNoBody(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		res := []blogPost{}
 		iter.Reset()
-		_, err := newScanner(stmt, &res).ScanIter(iter)
+		_, err := NewScanner(stmt, &res).ScanIter(iter)
 
 		if err != nil {
 			b.Fatalf("err: %+v", err)
@@ -91,7 +91,7 @@ func benchmarkBlogPostSingle(b *testing.B, postData []byte) {
 	for i := 0; i < b.N; i++ {
 		res := blogPost{}
 		iter.Reset()
-		_, err := newScanner(stmt, &res).ScanIter(iter)
+		_, err := NewScanner(stmt, &res).ScanIter(iter)
 
 		if err != nil {
 			b.Fatalf("err: %+v", err)
@@ -133,7 +133,7 @@ func BenchmarkDecodeAlphaSlice(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		res := []alphaStruct{}
 		iter.Reset()
-		_, err := newScanner(stmt, &res).ScanIter(iter)
+		_, err := NewScanner(stmt, &res).ScanIter(iter)
 
 		if err != nil {
 			b.Fatalf("err: %+v", err)
@@ -165,7 +165,7 @@ func BenchmarkDecodeAlphaStruct(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		res := alphaStruct{}
 		iter.Reset()
-		_, err := newScanner(stmt, &res).ScanIter(iter)
+		_, err := NewScanner(stmt, &res).ScanIter(iter)
 
 		if err != nil {
 			b.Fatalf("err: %+v", err)

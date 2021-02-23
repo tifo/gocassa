@@ -612,7 +612,7 @@ func (q *MockFilter) Read(out interface{}) Op {
 
 		stmt := SelectStatement{keyspace: q.table.ksName, table: q.table.Name(), fields: fieldNames}
 		iter := newMockIterator(result, stmt.fields)
-		_, err = newScanner(stmt, out).ScanIter(iter)
+		_, err = NewScanner(stmt, out).ScanIter(iter)
 		return err
 	})
 }

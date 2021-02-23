@@ -20,7 +20,7 @@ type scanner struct {
 	rowsScanned int
 }
 
-func newScanner(stmt SelectStatement, result interface{}) *scanner {
+func NewScanner(stmt SelectStatement, result interface{}) Scanner {
 	return &scanner{
 		stmt:        stmt,
 		result:      result,
@@ -37,6 +37,10 @@ func (s *scanner) ScanIter(iter Scannable) (int, error) {
 		return s.iterSingle(iter)
 	}
 	return 0, fmt.Errorf("can only decode into a struct or slice of structs, not %T", s.result)
+}
+
+func (s *scanner) Result() interface{} {
+	return s.result
 }
 
 func (s *scanner) iterSlice(iter Scannable) (int, error) {

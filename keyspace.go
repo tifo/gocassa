@@ -212,7 +212,7 @@ func (k *k) Tables() ([]string, error) {
 		fields:   []string{"table_name"},
 		where:    []Relation{Eq("keyspace_name", k.name)},
 	}
-	err := k.qe.Query(stmt, newScanner(stmt, &res))
+	err := k.qe.Query(stmt, NewScanner(stmt, &res))
 	if err != nil {
 		return nil, err
 	}

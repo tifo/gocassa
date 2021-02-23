@@ -349,12 +349,14 @@ type Scannable interface {
 	Err() error
 }
 
-// Scanner encapsulates a scanner which scans rows from a GoCQL iterator.
+// A Scanner scans row(s) from a GoCQL iterator into a result object.
 type Scanner interface {
-	// ScanIter takes in a Scannale iterator found in GoCQL and scans until
+	// ScanIter takes in a Scannable iterator found in GoCQL and scans until
 	// the iterator giveth no more. It number of rows read and an optional
 	// error if anything goes wrong
 	ScanIter(iter Scannable) (int, error)
+	// Result returns the result object that the scanner decodes into.
+	Result() interface{}
 }
 
 // QueryExecutor actually executes the queries - this is mostly useful for testing/mocking purposes,

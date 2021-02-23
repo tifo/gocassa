@@ -30,7 +30,7 @@ func TestScanIterSlice(t *testing.T) {
 
 	// Test with decoding into a slice of structs
 	a1 := []Account{}
-	rowsRead, err := newScanner(stmt, &a1).ScanIter(iter)
+	rowsRead, err := NewScanner(stmt, &a1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, rowsRead)
 	assert.Equal(t, expected, a1)
@@ -38,7 +38,7 @@ func TestScanIterSlice(t *testing.T) {
 
 	// Test with decoding into a pointer of slice of structs
 	b1 := &[]Account{}
-	rowsRead, err = newScanner(stmt, &b1).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &b1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, rowsRead)
 	assert.Equal(t, expected, *b1)
@@ -47,7 +47,7 @@ func TestScanIterSlice(t *testing.T) {
 	// Test with decoding into a pre-populated struct. It should
 	// remove existing elements
 	c1 := &[]Account{{ID: "acc_abcd3", Name: "Joe"}}
-	rowsRead, err = newScanner(stmt, &c1).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &c1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, rowsRead)
 	assert.Equal(t, expected, *c1)
@@ -56,7 +56,7 @@ func TestScanIterSlice(t *testing.T) {
 	// Test decoding into a nil slice
 	var d1 []Account
 	assert.Nil(t, d1)
-	rowsRead, err = newScanner(stmt, &d1).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &d1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, rowsRead)
 	assert.Equal(t, expected, d1)
@@ -65,7 +65,7 @@ func TestScanIterSlice(t *testing.T) {
 	// Test decoding into a pointer of pointer of nil-ness
 	var e1 **[]Account
 	assert.Nil(t, e1)
-	rowsRead, err = newScanner(stmt, &e1).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &e1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, rowsRead)
 	assert.Equal(t, expected, **e1)
@@ -74,7 +74,7 @@ func TestScanIterSlice(t *testing.T) {
 	// Test decoding into a slice of pointers
 	var f1 []*Account
 	assert.Nil(t, f1)
-	rowsRead, err = newScanner(stmt, &f1).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &f1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, rowsRead)
 	assert.Equal(t, expected[0], *f1[0])
@@ -88,7 +88,7 @@ func TestScanIterSlice(t *testing.T) {
 	}
 	var g1 []fakeStruct
 	assert.Nil(t, g1)
-	rowsRead, err = newScanner(stmt, &g1).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &g1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, rowsRead)
 	assert.Equal(t, fakeStruct{}, g1[0])
@@ -99,7 +99,7 @@ func TestScanIterSlice(t *testing.T) {
 	type emptyStruct struct{}
 	var h1 []emptyStruct
 	assert.Nil(t, h1)
-	rowsRead, err = newScanner(stmt, &h1).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &h1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, rowsRead)
 	assert.Equal(t, emptyStruct{}, h1[0])
@@ -113,7 +113,7 @@ func TestScanIterSlice(t *testing.T) {
 	}
 	var i1 []badStruct
 	assert.Nil(t, i1)
-	_, err = newScanner(stmt, &i1).ScanIter(iter)
+	_, err = NewScanner(stmt, &i1).ScanIter(iter)
 	assert.Error(t, err)
 	iter.Reset()
 }
@@ -135,7 +135,7 @@ func TestScanIterStruct(t *testing.T) {
 
 	// Test with decoding into a struct
 	a1 := Account{}
-	rowsRead, err := newScanner(stmt, &a1).ScanIter(iter)
+	rowsRead, err := NewScanner(stmt, &a1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, rowsRead)
 	assert.Equal(t, expected[0], a1)
@@ -143,7 +143,7 @@ func TestScanIterStruct(t *testing.T) {
 
 	// Test decoding into a pointer of pointer to struct
 	b1 := &Account{}
-	rowsRead, err = newScanner(stmt, &b1).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &b1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, rowsRead)
 	assert.Equal(t, expected[0], *b1)
@@ -152,7 +152,7 @@ func TestScanIterStruct(t *testing.T) {
 	// Test decoding into a nil struct
 	var c1 *Account
 	assert.Nil(t, c1)
-	rowsRead, err = newScanner(stmt, &c1).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &c1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, rowsRead)
 	assert.Equal(t, expected[0], *c1)
@@ -161,7 +161,7 @@ func TestScanIterStruct(t *testing.T) {
 	// Test decoding into a pointer of pointer of pointer to struct
 	var d1 **Account
 	assert.Nil(t, d1)
-	rowsRead, err = newScanner(stmt, &d1).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &d1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, rowsRead)
 	assert.Equal(t, expected[0], **d1)
@@ -170,10 +170,10 @@ func TestScanIterStruct(t *testing.T) {
 	// Test with multiple scans into different structs
 	var e1 *Account
 	var e2 ****Account
-	rowsRead, err = newScanner(stmt, &e1).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &e1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, rowsRead)
-	rowsRead, err = newScanner(stmt, &e2).ScanIter(iter)
+	rowsRead, err = NewScanner(stmt, &e2).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, rowsRead)
 	assert.Equal(t, expected[0], *e1)
@@ -183,13 +183,13 @@ func TestScanIterStruct(t *testing.T) {
 	// Test for row not found
 	var f1 *Account
 	noResultsIter := newMockIterator([]map[string]interface{}{}, stmt.fields)
-	rowsRead, err = newScanner(stmt, &f1).ScanIter(noResultsIter)
+	rowsRead, err = NewScanner(stmt, &f1).ScanIter(noResultsIter)
 	assert.EqualError(t, err, ":0: No rows returned")
 
 	// Test for a non-rows-not-found error
 	var g1 *Account
 	errorerIter := newMockIterator([]map[string]interface{}{}, stmt.fields)
-	errorScanner := newScanner(stmt, &g1)
+	errorScanner := NewScanner(stmt, &g1)
 	expectedErr := fmt.Errorf("Something went baaaad")
 	errorerIter.err = expectedErr
 	rowsRead, err = errorScanner.ScanIter(errorerIter)
@@ -217,7 +217,7 @@ func TestScanIterComposite(t *testing.T) {
 	}
 	var j1 []compositeAccountStruct
 	assert.Nil(t, j1)
-	rowsRead, err := newScanner(stmt, &j1).ScanIter(iter)
+	rowsRead, err := NewScanner(stmt, &j1).ScanIter(iter)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, rowsRead)
 	assert.Equal(t, "acc_abcd1", j1[0].ID)
@@ -247,7 +247,7 @@ func TestScanIterEmbedded(t *testing.T) {
 	account := Account{}
 	a1 := embeddedStruct{Account: &account}
 	assert.NotPanics(t, func() {
-		rowsRead, err := newScanner(stmt, &a1).ScanIter(iter)
+		rowsRead, err := NewScanner(stmt, &a1).ScanIter(iter)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, rowsRead)
 	})
