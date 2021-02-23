@@ -57,7 +57,7 @@ func (o *singleOp) Run() error {
 	switch o.opType {
 	case readOpType, singleReadOpType:
 		stmt := o.generateSelect(o.options)
-		scanner := newScanner(stmt, o.result)
+		scanner := NewScanner(stmt, o.result)
 		return o.qe.QueryWithOptions(o.options, stmt, scanner)
 	case insertOpType:
 		stmt := o.generateInsert(o.options)
