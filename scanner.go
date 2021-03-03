@@ -81,6 +81,7 @@ func (s *scanner) iterSlice(iter Scannable) (int, error) {
 		if err != nil {
 			return rowsScanned, err
 		}
+		fillInZeroedPtrs(ptrs)
 
 		sliceElem.Set(reflect.Append(sliceElem, wrapPtrValue(outVal, sliceElemType)))
 		rowsScanned++
@@ -124,6 +125,7 @@ func (s *scanner) iterSingle(iter Scannable) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	fillInZeroedPtrs(ptrs)
 
 	s.rowsScanned++
 	return 1, nil
@@ -132,10 +134,9 @@ func (s *scanner) iterSingle(iter Scannable) (int, error) {
 // structFields matches the SelectStatement field names selected to names of
 // fields within the target struct type
 func (s *scanner) structFields(structType reflect.Type) ([]*r.Field, error) {
-	fmPtr := reflect.New(structType).Interface()
-	m, err := r.StructFieldMap(fmPtr, true)
+	m, err := r.StructFieldMap(structType, true)
 	if err != nil {
-		return nil, fmt.Errorf("could not decode struct of type %T: %v", fmPtr, err)
+		return nil, fmt.Errorf("could not decode struct of type %v: %v", structType, err)
 	}
 
 	structFields := make([]*r.Field, len(s.stmt.fields))
@@ -185,14 +186,45 @@ func generatePtrs(structFields []*r.Field, structVal reflect.Value) []interface{
 
 		switch elem.Kind() {
 		case reflect.Map:
-			elem.Set(reflect.MakeMap(elem.Type()))
+			if elem.IsNil() {
+				elem.Set(reflect.MakeMap(elem.Type()))
+			}
 		case reflect.Slice:
-			elem.Set(reflect.MakeSlice(elem.Type(), 0, 0))
+			if elem.IsNil() {
+				elem.Set(reflect.MakeSlice(elem.Type(), 0, 0))
+			}
 		}
 
 		ptrs[i] = elem.Addr().Interface()
 	}
 	return ptrs
+}
+
+// fillInZeroedPtrs is necessary to re-allocate nil slices/maps in our ptr
+// list. Gocql unfortunately sees no data as an opportunity to zero out the
+// entire slice rather than leaving it as the empty slice. This means something
+// like []string{} will get turned into []string(nil) which aren't technically
+// the same
+func fillInZeroedPtrs(ptrs []interface{}) {
+	for _, ptr := range ptrs {
+		if _, ok := ptr.(*ignoreFieldType); ok {
+			continue
+		}
+
+		elem := reflect.ValueOf(ptr).Elem()
+
+		switch elem.Kind() {
+		case reflect.Map:
+			if elem.IsNil() || elem.IsZero() {
+				elem.Set(reflect.MakeMap(elem.Type()))
+			}
+		case reflect.Slice:
+			if elem.IsNil() || elem.IsZero() {
+				elem.Set(reflect.MakeSlice(elem.Type(), 0, 0))
+			}
+		}
+
+	}
 }
 
 // allocateNilReference checks to see if the in is not nil itself but points to

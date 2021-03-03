@@ -138,7 +138,7 @@ func TestMapToStruct(t *testing.T) {
 }
 
 func TestStructFieldMap(t *testing.T) {
-	m, err := StructFieldMap(Tweet{}, false)
+	m, err := StructFieldMap(reflect.TypeOf(Tweet{}), false)
 	if err != nil {
 		t.Fatalf("expected field map to be created, err: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestStructFieldMap(t *testing.T) {
 	}
 
 	// Test lowercasing fields
-	m2, err := StructFieldMap(Tweet{}, true)
+	m2, err := StructFieldMap(reflect.TypeOf(Tweet{}), true)
 	if err != nil {
 		t.Fatalf("expected field map to be created, err: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestStructFieldMapEmbeddedStruct(t *testing.T) {
 		Embedder string
 	}
 
-	m, err := StructFieldMap(EmbeddedTweet{}, false)
+	m, err := StructFieldMap(reflect.TypeOf(EmbeddedTweet{}), false)
 	if err != nil {
 		t.Fatalf("expected field map to be created, err: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestStructFieldMapEmbeddedStruct(t *testing.T) {
 }
 
 func TestStructFieldMapNonStruct(t *testing.T) {
-	_, err := StructFieldMap(42, false)
+	_, err := StructFieldMap(reflect.TypeOf(42), false)
 	if err == nil {
 		t.Fatalf("expected StructFieldMap to have an error, got nil error")
 	}

@@ -254,6 +254,27 @@ func TestScanIterEmbedded(t *testing.T) {
 	iter.Reset()
 }
 
+func TestFillInZeroedPtrs(t *testing.T) {
+	str := ""
+	strSlice := []string{}
+	strMap := map[string]string{}
+	strSliceNil := []string(nil)
+	strMapNil := map[string]string(nil)
+
+	// Test with already allocated
+	fillInZeroedPtrs([]interface{}{&str, &strSlice, &strMap})
+	assert.Equal(t, "", str)
+	assert.Equal(t, []string{}, strSlice)
+	assert.Equal(t, map[string]string{}, strMap)
+
+	// Test with nil allocated
+	assert.NotEqual(t, []string{}, strSliceNil)
+	assert.NotEqual(t, map[string]string{}, strMapNil)
+	fillInZeroedPtrs([]interface{}{&strSliceNil, &strMapNil})
+	assert.Equal(t, []string{}, strSliceNil)
+	assert.Equal(t, map[string]string{}, strMapNil)
+}
+
 func TestAllocateNilReference(t *testing.T) {
 	// Test non pointer, should do nothing
 	var a string
