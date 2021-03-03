@@ -75,14 +75,12 @@ func (s *scanner) iterSlice(iter Scannable) (int, error) {
 
 	rowsScanned := 0
 	for iter.Next() {
-		ptrs := generatePtrs(structFields)
+		outVal := reflect.New(sliceElemValType).Elem()
+		ptrs := generatePtrs(structFields, outVal)
 		err := iter.Scan(ptrs...)
 		if err != nil {
 			return rowsScanned, err
 		}
-
-		outVal := reflect.New(sliceElemValType).Elem()
-		setPtrs(structFields, ptrs, outVal)
 
 		sliceElem.Set(reflect.Append(sliceElem, wrapPtrValue(outVal, sliceElemType)))
 		rowsScanned++
@@ -114,7 +112,7 @@ func (s *scanner) iterSingle(iter Scannable) (int, error) {
 		return 0, err
 	}
 
-	ptrs := generatePtrs(structFields)
+	ptrs := generatePtrs(structFields, outVal)
 	if !iter.Next() {
 		err := iter.Err()
 		if err == nil || err == gocql.ErrNotFound {
@@ -126,8 +124,6 @@ func (s *scanner) iterSingle(iter Scannable) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-
-	setPtrs(structFields, ptrs, outVal)
 
 	s.rowsScanned++
 	return 1, nil
@@ -154,29 +150,17 @@ func (s *scanner) structFields(structType reflect.Type) ([]*r.Field, error) {
 	return structFields, nil
 }
 
-// generatePtrs takes in a list of Fields and generates an interface pointer.
+// generatePtrs takes in a list of fields and the target struct value
+// and generates a list of interface pointers
+//
 // If a structField is nil, it means it couldn't be matched and we insert
 // a ignoreFieldType pointer instead. This means you will always get back
 // len(structFields) pointers initialized
-func generatePtrs(structFields []*r.Field) []interface{} {
+func generatePtrs(structFields []*r.Field, structVal reflect.Value) []interface{} {
 	ptrs := make([]interface{}, len(structFields))
-	for i, sf := range structFields {
-		if sf == nil {
-			ptrs[i] = &ignoreFieldType{}
-			continue
-		}
-
-		val := reflect.New(sf.Type())
-		ptrs[i] = val.Interface()
-	}
-	return ptrs
-}
-
-// setPtrs takes a list of fields and the associated pointers and sets them
-// in order to the targetStruct
-func setPtrs(structFields []*r.Field, ptrs []interface{}, targetStruct reflect.Value) {
-	for index, field := range structFields {
+	for i, field := range structFields {
 		if field == nil {
+			ptrs[i] = &ignoreFieldType{}
 			continue
 		}
 
@@ -186,32 +170,29 @@ func setPtrs(structFields []*r.Field, ptrs []interface{}, targetStruct reflect.V
 		// pointers (if they aren't allocated already) and traversing the
 		// struct allocating all the way down as necessary
 		if len(field.Index()) > 1 {
-			elem := targetStruct.FieldByIndex([]int{field.Index()[0]})
+			elem := structVal.FieldByIndex([]int{field.Index()[0]})
 			if elem.Kind() == reflect.Ptr && elem.IsNil() {
+				ptrs[i] = &ignoreFieldType{}
 				continue
 			}
 		}
 
-		elem := targetStruct.FieldByIndex(field.Index())
-		if elem.CanSet() {
-			data := reflect.ValueOf(ptrs[index]).Elem()
-
-			// To preserve old behaviour, if we got a nil element back, we need
-			// to initialize it ourselves
-			switch data.Kind() {
-			case reflect.Map:
-				if data.IsNil() {
-					data = reflect.MakeMap(elem.Type())
-				}
-			case reflect.Slice:
-				if data.IsNil() {
-					data = reflect.MakeSlice(elem.Type(), 0, 0)
-				}
-			}
-
-			elem.Set(data)
+		elem := structVal.FieldByIndex(field.Index())
+		if !elem.CanSet() {
+			ptrs[i] = &ignoreFieldType{}
+			continue
 		}
+
+		switch elem.Kind() {
+		case reflect.Map:
+			elem.Set(reflect.MakeMap(elem.Type()))
+		case reflect.Slice:
+			elem.Set(reflect.MakeSlice(elem.Type(), 0, 0))
+		}
+
+		ptrs[i] = elem.Addr().Interface()
 	}
+	return ptrs
 }
 
 // allocateNilReference checks to see if the in is not nil itself but points to
