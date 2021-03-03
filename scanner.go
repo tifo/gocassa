@@ -85,7 +85,6 @@ func (s *scanner) iterSlice(iter Scannable) (int, error) {
 		setPtrs(structFields, ptrs, outVal)
 
 		sliceElem.Set(reflect.Append(sliceElem, wrapPtrValue(outVal, sliceElemType)))
-		ptrs = generatePtrs(structFields)
 		rowsScanned++
 	}
 
