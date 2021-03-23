@@ -68,15 +68,15 @@ func (s *scanner) iterSlice(iter Scannable) (int, error) {
 	}
 
 	// Extract the type of the underlying struct
-	structFields, err := s.structFields(sliceElemValType)
+	fieldMap, err := r.StructFieldMap(sliceElemValType, true)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("could not decode struct of type %v: %v", sliceElemValType, err)
 	}
 
 	rowsScanned := 0
 	for iter.Next() {
 		outVal := reflect.New(sliceElemValType).Elem()
-		ptrs := generatePtrs(structFields, outVal)
+		ptrs := generatePtrs(s.stmt.Fields(), fieldMap, outVal)
 		err := iter.Scan(ptrs...)
 		if err != nil {
 			return rowsScanned, err
@@ -106,14 +106,14 @@ func (s *scanner) iterSingle(iter Scannable) (int, error) {
 		outVal = outVal.Elem() // we will eventually get to the underlying value
 	}
 
-	// Extract the type of the underlying struct
+	// Extract the type of the underlying struct and get it's field map
 	resultBaseType := getNonPtrType(reflect.TypeOf(s.result))
-	structFields, err := s.structFields(resultBaseType)
+	fieldMap, err := r.StructFieldMap(resultBaseType, true)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("could not decode struct of type %v: %v", resultBaseType, err)
 	}
 
-	ptrs := generatePtrs(structFields, outVal)
+	ptrs := generatePtrs(s.stmt.Fields(), fieldMap, outVal)
 	if !iter.Next() {
 		err := iter.Err()
 		if err == nil || err == gocql.ErrNotFound {
@@ -131,36 +131,18 @@ func (s *scanner) iterSingle(iter Scannable) (int, error) {
 	return 1, nil
 }
 
-// structFields matches the SelectStatement field names selected to names of
-// fields within the target struct type
-func (s *scanner) structFields(structType reflect.Type) ([]*r.Field, error) {
-	m, err := r.StructFieldMap(structType, true)
-	if err != nil {
-		return nil, fmt.Errorf("could not decode struct of type %v: %v", structType, err)
-	}
-
-	structFields := make([]*r.Field, len(s.stmt.fields))
-	for i, fieldName := range s.stmt.fields {
-		field, ok := m[strings.ToLower(fieldName)]
-		if !ok { // the field doesn't have a destination
-			structFields[i] = nil
-		} else {
-			structFields[i] = &field
-		}
-	}
-	return structFields, nil
-}
-
-// generatePtrs takes in a list of fields and the target struct value
-// and generates a list of interface pointers
+// generatePtrs takes in a list of fields, the field map giving the type info
+// per field and the target struct value and generates a list of interface
+// pointers
 //
-// If a structField is nil, it means it couldn't be matched and we insert
-// a ignoreFieldType pointer instead. This means you will always get back
-// len(structFields) pointers initialized
-func generatePtrs(structFields []*r.Field, structVal reflect.Value) []interface{} {
-	ptrs := make([]interface{}, len(structFields))
-	for i, field := range structFields {
-		if field == nil {
+// If a field is nil, it means it couldn't be matched and we insert an
+// ignoreFieldType pointer instead. This means you will always get back
+// len(fields) pointers initialized
+func generatePtrs(fields []string, fieldMap map[string]r.Field, structVal reflect.Value) []interface{} {
+	ptrs := make([]interface{}, len(fields))
+	for i, fieldName := range fields {
+		field, ok := fieldMap[strings.ToLower(fieldName)]
+		if !ok {
 			ptrs[i] = &ignoreFieldType{}
 			continue
 		}
