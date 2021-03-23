@@ -4,7 +4,6 @@ package reflect
 import (
 	"fmt"
 	r "reflect"
-	"strings"
 )
 
 // StructToMap converts a struct to map. The object's default key string
@@ -54,30 +53,14 @@ func StructFieldMap(structType r.Type, lowercaseFields bool) (map[string]Field, 
 	if structType.Kind() != r.Struct {
 		return nil, fmt.Errorf("expected val to be a struct, got %v", structType)
 	}
-
-	structFields := cachedTypeFields(structType)
-	mapVal := make(map[string]Field, len(structFields))
-	for _, info := range structFields {
-		name := info.name
-		if lowercaseFields {
-			name = strings.ToLower(name)
-		}
-		mapVal[name] = info
-	}
-	return mapVal, nil
+	return cachedTypeFieldMap(structType, lowercaseFields), nil
 }
 
 // MapToStruct converts a map to a struct. It is the inverse of the StructToMap
 // function. For details see StructToMap.
 func MapToStruct(m map[string]interface{}, struc interface{}) error {
 	val := r.Indirect(r.ValueOf(struc))
-	structFields := cachedTypeFields(val.Type())
-
-	// Create fields map for faster lookup
-	fieldsMap := make(map[string]Field)
-	for _, field := range structFields {
-		fieldsMap[field.name] = field
-	}
+	fieldsMap := cachedTypeFieldMap(val.Type(), false)
 
 	for k, v := range m {
 		if info, ok := fieldsMap[k]; ok {
