@@ -3,6 +3,7 @@ package reflect
 import (
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -234,32 +235,64 @@ func dominantField(fields []Field) (Field, bool) {
 	return fields[0], true
 }
 
+type fieldCacheEntry struct {
+	fields        []Field          // list of fields
+	fieldMap      map[string]Field // map of fields by name
+	fieldMapLower map[string]Field // map of fields by lower case name
+}
+
 var fieldCache struct {
 	sync.RWMutex
-	m map[reflect.Type][]Field
+	m map[reflect.Type]fieldCacheEntry
+}
+
+func init() {
+	fieldCache.m = map[reflect.Type]fieldCacheEntry{}
 }
 
 // cachedTypeFields is like typeFields but uses a cache to avoid repeated work.
 func cachedTypeFields(t reflect.Type) []Field {
-	fieldCache.RLock()
-	f := fieldCache.m[t]
-	fieldCache.RUnlock()
-	if f != nil {
-		return f
-	}
+	entry := cachedTypeFieldEntry(t)
+	return entry.fields
+}
 
-	// Compute fields without lock.
-	// Might duplicate effort but won't hold other computations back.
-	f = typeFields(t)
-	if f == nil {
-		f = []Field{}
+// cachedTypeFieldMap returns a map keyed by the field name, the lower parameter
+// defines whether the map is keyed by the lowercase field name
+func cachedTypeFieldMap(t reflect.Type, lower bool) map[string]Field {
+	entry := cachedTypeFieldEntry(t)
+	if lower {
+		return entry.fieldMapLower
+	}
+	return entry.fieldMap
+}
+
+func cachedTypeFieldEntry(t reflect.Type) fieldCacheEntry {
+	fieldCache.RLock()
+	entry, ok := fieldCache.m[t]
+	fieldCache.RUnlock()
+	if ok {
+		return entry
 	}
 
 	fieldCache.Lock()
-	if fieldCache.m == nil {
-		fieldCache.m = map[reflect.Type][]Field{}
+	defer fieldCache.Unlock()
+	entry, ok = fieldCache.m[t]
+	if ok {
+		return entry
 	}
-	fieldCache.m[t] = f
-	fieldCache.Unlock()
-	return f
+
+	fields := typeFields(t)
+	fieldMap := make(map[string]Field, len(fields))
+	fieldMapLower := make(map[string]Field, len(fields))
+	for _, field := range fields {
+		fieldMap[field.Name()] = field
+		fieldMapLower[strings.ToLower(field.Name())] = field
+	}
+
+	fieldCache.m[t] = fieldCacheEntry{
+		fields:        fields,
+		fieldMap:      fieldMap,
+		fieldMapLower: fieldMapLower,
+	}
+	return fieldCache.m[t]
 }

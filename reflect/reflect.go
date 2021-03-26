@@ -4,7 +4,6 @@ package reflect
 import (
 	"fmt"
 	r "reflect"
-	"strings"
 )
 
 // StructToMap converts a struct to map. The object's default key string
@@ -36,7 +35,7 @@ func StructToMap(val interface{}) (map[string]interface{}, bool) {
 	return mapVal, true
 }
 
-// StructFieldMap takes a struct and extracts the Field info into a map by
+// StructFieldMap takes a struct type and extracts the Field info into a map by
 // field name. The "cql" key in the struct field's tag value is the key
 // name. Examples:
 //
@@ -50,37 +49,18 @@ func StructToMap(val interface{}) (map[string]interface{}, bool) {
 //   Field int "myName"
 //
 // If lowercaseFields is set to true, field names are lowercased in the map
-func StructFieldMap(val interface{}, lowercaseFields bool) (map[string]Field, error) {
-	// indirect so function works with both structs and pointers to them
-	structVal := r.Indirect(r.ValueOf(val))
-	kind := structVal.Kind()
-	if kind != r.Struct {
-		return nil, fmt.Errorf("expected val to be a struct, got %T", val)
+func StructFieldMap(structType r.Type, lowercaseFields bool) (map[string]Field, error) {
+	if structType.Kind() != r.Struct {
+		return nil, fmt.Errorf("expected val to be a struct, got %v", structType)
 	}
-
-	structFields := cachedTypeFields(structVal.Type())
-	mapVal := make(map[string]Field, len(structFields))
-	for _, info := range structFields {
-		name := info.name
-		if lowercaseFields {
-			name = strings.ToLower(name)
-		}
-		mapVal[name] = info
-	}
-	return mapVal, nil
+	return cachedTypeFieldMap(structType, lowercaseFields), nil
 }
 
 // MapToStruct converts a map to a struct. It is the inverse of the StructToMap
 // function. For details see StructToMap.
 func MapToStruct(m map[string]interface{}, struc interface{}) error {
 	val := r.Indirect(r.ValueOf(struc))
-	structFields := cachedTypeFields(val.Type())
-
-	// Create fields map for faster lookup
-	fieldsMap := make(map[string]Field)
-	for _, field := range structFields {
-		fieldsMap[field.name] = field
-	}
+	fieldsMap := cachedTypeFieldMap(val.Type(), false)
 
 	for k, v := range m {
 		if info, ok := fieldsMap[k]; ok {

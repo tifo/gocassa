@@ -68,24 +68,22 @@ func (s *scanner) iterSlice(iter Scannable) (int, error) {
 	}
 
 	// Extract the type of the underlying struct
-	structFields, err := s.structFields(sliceElemValType)
+	fieldMap, err := r.StructFieldMap(sliceElemValType, true)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("could not decode struct of type %v: %v", sliceElemValType, err)
 	}
 
 	rowsScanned := 0
 	for iter.Next() {
-		ptrs := generatePtrs(structFields)
+		outVal := reflect.New(sliceElemValType).Elem()
+		ptrs := generatePtrs(s.stmt.Fields(), fieldMap, outVal)
 		err := iter.Scan(ptrs...)
 		if err != nil {
 			return rowsScanned, err
 		}
-
-		outVal := reflect.New(sliceElemValType).Elem()
-		setPtrs(structFields, ptrs, outVal)
+		fillInZeroedPtrs(ptrs)
 
 		sliceElem.Set(reflect.Append(sliceElem, wrapPtrValue(outVal, sliceElemType)))
-		ptrs = generatePtrs(structFields)
 		rowsScanned++
 	}
 
@@ -108,14 +106,14 @@ func (s *scanner) iterSingle(iter Scannable) (int, error) {
 		outVal = outVal.Elem() // we will eventually get to the underlying value
 	}
 
-	// Extract the type of the underlying struct
+	// Extract the type of the underlying struct and get it's field map
 	resultBaseType := getNonPtrType(reflect.TypeOf(s.result))
-	structFields, err := s.structFields(resultBaseType)
+	fieldMap, err := r.StructFieldMap(resultBaseType, true)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("could not decode struct of type %v: %v", resultBaseType, err)
 	}
 
-	ptrs := generatePtrs(structFields)
+	ptrs := generatePtrs(s.stmt.Fields(), fieldMap, outVal)
 	if !iter.Next() {
 		err := iter.Err()
 		if err == nil || err == gocql.ErrNotFound {
@@ -127,57 +125,25 @@ func (s *scanner) iterSingle(iter Scannable) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-
-	setPtrs(structFields, ptrs, outVal)
+	fillInZeroedPtrs(ptrs)
 
 	s.rowsScanned++
 	return 1, nil
 }
 
-// structFields matches the SelectStatement field names selected to names of
-// fields within the target struct type
-func (s *scanner) structFields(structType reflect.Type) ([]*r.Field, error) {
-	fmPtr := reflect.New(structType).Interface()
-	m, err := r.StructFieldMap(fmPtr, true)
-	if err != nil {
-		return nil, fmt.Errorf("could not decode struct of type %T: %v", fmPtr, err)
-	}
-
-	structFields := make([]*r.Field, len(s.stmt.fields))
-	for i, fieldName := range s.stmt.fields {
-		field, ok := m[strings.ToLower(fieldName)]
-		if !ok { // the field doesn't have a destination
-			structFields[i] = nil
-		} else {
-			structFields[i] = &field
-		}
-	}
-	return structFields, nil
-}
-
-// generatePtrs takes in a list of Fields and generates an interface pointer.
-// If a structField is nil, it means it couldn't be matched and we insert
-// a ignoreFieldType pointer instead. This means you will always get back
-// len(structFields) pointers initialized
-func generatePtrs(structFields []*r.Field) []interface{} {
-	ptrs := make([]interface{}, len(structFields))
-	for i, sf := range structFields {
-		if sf == nil {
+// generatePtrs takes in a list of fields, the field map giving the type info
+// per field and the target struct value and generates a list of interface
+// pointers
+//
+// If a field is nil, it means it couldn't be matched and we insert an
+// ignoreFieldType pointer instead. This means you will always get back
+// len(fields) pointers initialized
+func generatePtrs(fields []string, fieldMap map[string]r.Field, structVal reflect.Value) []interface{} {
+	ptrs := make([]interface{}, len(fields))
+	for i, fieldName := range fields {
+		field, ok := fieldMap[strings.ToLower(fieldName)]
+		if !ok {
 			ptrs[i] = &ignoreFieldType{}
-			continue
-		}
-
-		val := reflect.New(sf.Type())
-		ptrs[i] = val.Interface()
-	}
-	return ptrs
-}
-
-// setPtrs takes a list of fields and the associated pointers and sets them
-// in order to the targetStruct
-func setPtrs(structFields []*r.Field, ptrs []interface{}, targetStruct reflect.Value) {
-	for index, field := range structFields {
-		if field == nil {
 			continue
 		}
 
@@ -187,31 +153,59 @@ func setPtrs(structFields []*r.Field, ptrs []interface{}, targetStruct reflect.V
 		// pointers (if they aren't allocated already) and traversing the
 		// struct allocating all the way down as necessary
 		if len(field.Index()) > 1 {
-			elem := targetStruct.FieldByIndex([]int{field.Index()[0]})
+			elem := structVal.FieldByIndex([]int{field.Index()[0]})
 			if elem.Kind() == reflect.Ptr && elem.IsNil() {
+				ptrs[i] = &ignoreFieldType{}
 				continue
 			}
 		}
 
-		elem := targetStruct.FieldByIndex(field.Index())
-		if elem.CanSet() {
-			data := reflect.ValueOf(ptrs[index]).Elem()
-
-			// To preserve old behaviour, if we got a nil element back, we need
-			// to initialize it ourselves
-			switch data.Kind() {
-			case reflect.Map:
-				if data.IsNil() {
-					data = reflect.MakeMap(elem.Type())
-				}
-			case reflect.Slice:
-				if data.IsNil() {
-					data = reflect.MakeSlice(elem.Type(), 0, 0)
-				}
-			}
-
-			elem.Set(data)
+		elem := structVal.FieldByIndex(field.Index())
+		if !elem.CanSet() {
+			ptrs[i] = &ignoreFieldType{}
+			continue
 		}
+
+		switch elem.Kind() {
+		case reflect.Map:
+			if elem.IsNil() {
+				elem.Set(reflect.MakeMap(elem.Type()))
+			}
+		case reflect.Slice:
+			if elem.IsNil() {
+				elem.Set(reflect.MakeSlice(elem.Type(), 0, 0))
+			}
+		}
+
+		ptrs[i] = elem.Addr().Interface()
+	}
+	return ptrs
+}
+
+// fillInZeroedPtrs is necessary to re-allocate nil slices/maps in our ptr
+// list. Gocql unfortunately sees no data as an opportunity to zero out the
+// entire slice rather than leaving it as the empty slice. This means something
+// like []string{} will get turned into []string(nil) which aren't technically
+// the same
+func fillInZeroedPtrs(ptrs []interface{}) {
+	for _, ptr := range ptrs {
+		if _, ok := ptr.(*ignoreFieldType); ok {
+			continue
+		}
+
+		elem := reflect.ValueOf(ptr).Elem()
+
+		switch elem.Kind() {
+		case reflect.Map:
+			if elem.IsNil() || elem.IsZero() {
+				elem.Set(reflect.MakeMap(elem.Type()))
+			}
+		case reflect.Slice:
+			if elem.IsNil() || elem.IsZero() {
+				elem.Set(reflect.MakeSlice(elem.Type(), 0, 0))
+			}
+		}
+
 	}
 }
 
