@@ -165,6 +165,7 @@ func (mo mockMultiOp) Preflight() error {
 
 func (ks *mockKeySpace) NewTable(name string, entity interface{}, fieldSource map[string]interface{}, keys Keys) Table {
 	mt := &MockTable{
+		RWMutex:     &sync.RWMutex{},
 		ksName:      ks.Name(),
 		tableName:   name,
 		entity:      entity,
@@ -191,7 +192,7 @@ func NewMockKeySpace() KeySpace {
 
 // MockTable implements the Table interface and stores rows in-memory.
 type MockTable struct {
-	sync.RWMutex
+	*sync.RWMutex
 
 	// rows is mapping from row key to column group key to column map
 	mtx         *sync.RWMutex
@@ -430,6 +431,7 @@ func (t *MockTable) Recreate() error {
 
 func (t *MockTable) WithOptions(o Options) Table {
 	return &MockTable{
+		RWMutex:     t.RWMutex,
 		ksName:      t.ksName,
 		tableName:   t.tableName,
 		rows:        t.rows,
