@@ -749,7 +749,7 @@ func (iter *mockIterator) Scan(dest ...interface{}) error {
 
 		// If it's a field to ignore, then ignore it ;)
 		rv := reflect.ValueOf(dest[i])
-		if rv.Elem().Type() == reflect.TypeOf((*ignoreFieldType)(nil)).Elem() {
+		if rv.Elem().Type() == reflect.TypeOf((*IgnoreFieldType)(nil)).Elem() {
 			continue
 		}
 

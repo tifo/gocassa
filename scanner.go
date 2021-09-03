@@ -136,14 +136,14 @@ func (s *scanner) iterSingle(iter Scannable) (int, error) {
 // pointers
 //
 // If a field is nil, it means it couldn't be matched and we insert an
-// ignoreFieldType pointer instead. This means you will always get back
+// IgnoreFieldType pointer instead. This means you will always get back
 // len(fields) pointers initialized
 func generatePtrs(fields []string, fieldMap map[string]r.Field, structVal reflect.Value) []interface{} {
 	ptrs := make([]interface{}, len(fields))
 	for i, fieldName := range fields {
 		field, ok := fieldMap[strings.ToLower(fieldName)]
 		if !ok {
-			ptrs[i] = &ignoreFieldType{}
+			ptrs[i] = &IgnoreFieldType{}
 			continue
 		}
 
@@ -155,14 +155,14 @@ func generatePtrs(fields []string, fieldMap map[string]r.Field, structVal reflec
 		if len(field.Index()) > 1 {
 			elem := structVal.FieldByIndex([]int{field.Index()[0]})
 			if elem.Kind() == reflect.Ptr && elem.IsNil() {
-				ptrs[i] = &ignoreFieldType{}
+				ptrs[i] = &IgnoreFieldType{}
 				continue
 			}
 		}
 
 		elem := structVal.FieldByIndex(field.Index())
 		if !elem.CanSet() {
-			ptrs[i] = &ignoreFieldType{}
+			ptrs[i] = &IgnoreFieldType{}
 			continue
 		}
 
@@ -189,7 +189,7 @@ func generatePtrs(fields []string, fieldMap map[string]r.Field, structVal reflec
 // the same
 func fillInZeroedPtrs(ptrs []interface{}) {
 	for _, ptr := range ptrs {
-		if _, ok := ptr.(*ignoreFieldType); ok {
+		if _, ok := ptr.(*IgnoreFieldType); ok {
 			continue
 		}
 
@@ -284,12 +284,12 @@ func wrapPtrValue(ptr reflect.Value, target reflect.Type) reflect.Value {
 	return resultPtr
 }
 
-// ignoreFieldType struct is for fields we want to ignore, we specify a custom
+// IgnoreFieldType struct is for fields we want to ignore, we specify a custom
 // unmarshal type which literally is a no-op and does nothing with this data.
 // In the future, maybe we can be smarter of only extracting fields which we
 // are able to unmarshal into our target struct and get rid of this
-type ignoreFieldType struct{}
+type IgnoreFieldType struct{}
 
-func (i *ignoreFieldType) UnmarshalCQL(_ gocql.TypeInfo, _ []byte) error {
+func (i *IgnoreFieldType) UnmarshalCQL(_ gocql.TypeInfo, _ []byte) error {
 	return nil
 }
