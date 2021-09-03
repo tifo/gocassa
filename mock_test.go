@@ -704,18 +704,18 @@ func (s *MockIteratorSuite) TestIgnorableFields() {
 	// Test ignorable things
 	var a2, b2 string
 	s.True(iter.Next())
-	s.NoError(iter.Scan(&a2, &ignoreFieldType{}))
+	s.NoError(iter.Scan(&a2, &IgnoreFieldType{}))
 	s.Equal("1", a2)
 	s.Equal("", b2)
 	iter.Reset()
 	s.True(iter.Next())
-	s.NoError(iter.Scan(&ignoreFieldType{}, &b2))
+	s.NoError(iter.Scan(&IgnoreFieldType{}, &b2))
 	s.Equal("2", b2)
 	iter.Reset()
 
 	// Test ignoring everything
 	s.True(iter.Next())
-	s.NoError(iter.Scan(&ignoreFieldType{}, &ignoreFieldType{}))
+	s.NoError(iter.Scan(&IgnoreFieldType{}, &IgnoreFieldType{}))
 	iter.Reset()
 
 	result = map[string]interface{}{"a": "1", "b": "2", "c": "3"}
