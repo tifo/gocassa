@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type Account struct {
@@ -254,6 +255,56 @@ func TestScanIterEmbedded(t *testing.T) {
 	iter.Reset()
 }
 
+func TestScanWithSentinelValues(t *testing.T) {
+	type accountStruct struct {
+		ID       string
+		Name     string
+		Metadata []byte
+	}
+
+	t.Run("SliceValues", func(t *testing.T) {
+		results := []map[string]interface{}{
+			{"id": "acc_abcd1", "name": ClusteringSentinel, "metadata": []byte{}},
+			{"id": "acc_abcd2", "name": "Jane", "metadata": []byte(ClusteringSentinel)},
+		}
+
+		fieldNames := []string{"id", "name", "metadata"}
+		stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+		iter := newMockIterator(results, stmt.fields)
+
+		rows := []*accountStruct{}
+		rowsRead, err := NewScanner(stmt, &rows).ScanIter(iter)
+		require.NoError(t, err)
+		require.Equal(t, 2, rowsRead)
+
+		assert.Equal(t, "acc_abcd1", rows[0].ID)
+		assert.Equal(t, "", rows[0].Name)
+		assert.Equal(t, []byte{}, rows[0].Metadata)
+		assert.Equal(t, "acc_abcd2", rows[1].ID)
+		assert.Equal(t, "Jane", rows[1].Name)
+		assert.Equal(t, []byte{}, rows[1].Metadata)
+	})
+
+	t.Run("StructValues", func(t *testing.T) {
+		results := []map[string]interface{}{
+			{"id": "acc_abcd1", "name": ClusteringSentinel, "metadata": []byte{}},
+		}
+
+		fieldNames := []string{"id", "name", "metadata"}
+		stmt := SelectStatement{keyspace: "test", table: "bench", fields: fieldNames}
+		iter := newMockIterator(results, stmt.fields)
+
+		row := &accountStruct{}
+		rowsRead, err := NewScanner(stmt, row).ScanIter(iter)
+		require.NoError(t, err)
+		require.Equal(t, 1, rowsRead)
+
+		assert.Equal(t, "acc_abcd1", row.ID)
+		assert.Equal(t, "", row.Name)
+		assert.Equal(t, []byte{}, row.Metadata)
+	})
+}
+
 func TestFillInZeroedPtrs(t *testing.T) {
 	str := ""
 	strSlice := []string{}
@@ -273,6 +324,24 @@ func TestFillInZeroedPtrs(t *testing.T) {
 	fillInZeroedPtrs([]interface{}{&strSliceNil, &strMapNil})
 	assert.Equal(t, []string{}, strSliceNil)
 	assert.Equal(t, map[string]string{}, strMapNil)
+}
+
+func TestRemoveSentinelValues(t *testing.T) {
+	str := ""
+	byteSlice := []byte{}
+	intVal := 0
+
+	removeSentinelValues([]interface{}{&str, &byteSlice, &intVal})
+	assert.Equal(t, "", str)
+	assert.Equal(t, []byte{}, byteSlice)
+	assert.Equal(t, 0, intVal)
+
+	str = ClusteringSentinel
+	byteSlice = []byte(ClusteringSentinel)
+	removeSentinelValues([]interface{}{&str, &byteSlice, &intVal})
+	assert.Equal(t, "", str)
+	assert.Equal(t, []byte{}, byteSlice)
+	assert.Equal(t, 0, intVal)
 }
 
 func TestAllocateNilReference(t *testing.T) {

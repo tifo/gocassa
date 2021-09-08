@@ -81,6 +81,7 @@ func (s *scanner) iterSlice(iter Scannable) (int, error) {
 		if err != nil {
 			return rowsScanned, err
 		}
+		removeSentinelValues(ptrs)
 		fillInZeroedPtrs(ptrs)
 
 		sliceElem.Set(reflect.Append(sliceElem, wrapPtrValue(outVal, sliceElemType)))
@@ -125,6 +126,7 @@ func (s *scanner) iterSingle(iter Scannable) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	removeSentinelValues(ptrs)
 	fillInZeroedPtrs(ptrs)
 
 	s.rowsScanned++
@@ -205,7 +207,21 @@ func fillInZeroedPtrs(ptrs []interface{}) {
 				elem.Set(reflect.MakeSlice(elem.Type(), 0, 0))
 			}
 		}
+	}
+}
 
+// removeSentinelValues removes any clustering sentinel values from being
+// exposed as data is scanned
+func removeSentinelValues(ptrs []interface{}) {
+	for _, ptr := range ptrs {
+		if _, ok := ptr.(*IgnoreFieldType); ok {
+			continue
+		}
+
+		elem := reflect.ValueOf(ptr).Elem()
+		if isSentinel, nonSentinelValue := isClusteringSentinelValue(elem.Interface()); isSentinel {
+			elem.Set(reflect.ValueOf(nonSentinelValue))
+		}
 	}
 }
 
