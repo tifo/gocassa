@@ -291,3 +291,96 @@ func TestClusteringFieldOrSentinel(t *testing.T) {
 	assert.Equal(t, 42, clusteringFieldOrSentinel(42))
 	assert.Equal(t, struct{}{}, clusteringFieldOrSentinel(struct{}{}))
 }
+
+func TestIsClusteringSentinelValue(t *testing.T) {
+	type fooString string
+	type fooSlice []byte
+
+	testCases := []struct {
+		desc               string
+		input              interface{}
+		expectedIsSentinel bool
+		expectedOutput     interface{}
+	}{
+		{
+			desc:               "sentinel string",
+			input:              ClusteringSentinel,
+			expectedIsSentinel: true,
+			expectedOutput:     "",
+		},
+		{
+			desc:               "indirect sentinel string",
+			input:              fooString(ClusteringSentinel),
+			expectedIsSentinel: true,
+			expectedOutput:     fooString(""),
+		},
+		{
+			desc:               "empty string",
+			input:              "",
+			expectedIsSentinel: false,
+			expectedOutput:     "",
+		},
+		{
+			desc:               "other string",
+			input:              "foo",
+			expectedIsSentinel: false,
+			expectedOutput:     "foo",
+		},
+		{
+			desc:               "sentinel slice",
+			input:              []byte(ClusteringSentinel),
+			expectedIsSentinel: true,
+			expectedOutput:     []byte{},
+		},
+		{
+			desc:               "indirect sentinel slice",
+			input:              fooSlice(ClusteringSentinel),
+			expectedIsSentinel: true,
+			expectedOutput:     fooSlice{},
+		},
+		{
+			desc:               "nil slice",
+			input:              []byte(nil),
+			expectedIsSentinel: false,
+			expectedOutput:     []byte(nil),
+		},
+		{
+			desc:               "empty byte slice",
+			input:              []byte{},
+			expectedIsSentinel: false,
+			expectedOutput:     []byte{},
+		},
+		{
+			desc:               "other byte slice",
+			input:              []byte{0x00},
+			expectedIsSentinel: false,
+			expectedOutput:     []byte{0x00},
+		},
+		{
+			desc:               "int zero",
+			input:              0,
+			expectedIsSentinel: false,
+			expectedOutput:     0,
+		},
+		{
+			desc:               "int 42",
+			input:              42,
+			expectedIsSentinel: false,
+			expectedOutput:     42,
+		},
+		{
+			desc:               "empty struct",
+			input:              struct{}{},
+			expectedIsSentinel: false,
+			expectedOutput:     struct{}{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			isSentinel, nonSentinelVal := isClusteringSentinelValue(tc.input)
+			assert.Equal(t, tc.expectedIsSentinel, isSentinel)
+			assert.Equal(t, tc.expectedOutput, nonSentinelVal)
+		})
+	}
+}

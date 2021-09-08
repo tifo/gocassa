@@ -1,7 +1,9 @@
 package gocassa
 
 import (
+	"bytes"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -626,5 +628,25 @@ func clusteringFieldOrSentinel(term interface{}) interface{} {
 		return v
 	default:
 		return term
+	}
+}
+
+// isClusteringSentinelValue returns a boolean on whether the value passed in
+// is the clustering sentinel value and what the non-sentinel value is
+func isClusteringSentinelValue(term interface{}) (bool, interface{}) {
+	val := reflect.ValueOf(term)
+	switch {
+	case val.Kind() == reflect.String:
+		if val.String() == ClusteringSentinel {
+			return true, reflect.New(val.Type()).Elem().Interface()
+		}
+		return false, term
+	case val.Kind() == reflect.Slice && val.Type().Elem().Kind() == reflect.Uint8:
+		if bytes.Equal(val.Bytes(), []byte(ClusteringSentinel)) {
+			return true, reflect.MakeSlice(val.Type(), 0, 0).Interface()
+		}
+		return false, term
+	default:
+		return false, term
 	}
 }
