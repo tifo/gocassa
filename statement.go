@@ -18,15 +18,15 @@ var (
 // SelectStatement represents a read (SELECT) query for some data in C*
 // It satisfies the Statement interface
 type SelectStatement struct {
-	keyspace             string                  // name of the keyspace
-	table                string                  // name of the table
-	fields               []string                // list of fields we want to select
-	where                []Relation              // where filter clauses
-	order                []ClusteringOrderColumn // order by clauses
-	limit                int                     // limit count, 0 means no limit
-	allowFiltering       bool                    // whether we should allow filtering
-	keys                 Keys                    // partition / clustering keys for table
-	allowClusterSentinel bool                    // whether we should enable our clustering sentinel
+	keyspace                   string                  // name of the keyspace
+	table                      string                  // name of the table
+	fields                     []string                // list of fields we want to select
+	where                      []Relation              // where filter clauses
+	order                      []ClusteringOrderColumn // order by clauses
+	limit                      int                     // limit count, 0 means no limit
+	allowFiltering             bool                    // whether we should allow filtering
+	keys                       Keys                    // partition / clustering keys for table
+	clusteringSentinelsEnabled bool                    // whether we should enable our clustering sentinel
 }
 
 // NewSelectStatement adds the ability to craft a new SelectStatement
@@ -74,7 +74,7 @@ func (s SelectStatement) QueryAndValues() (string, []interface{}) {
 		fmt.Sprintf("FROM %s.%s", s.Keyspace(), s.Table()),
 	}
 
-	whereCQL, whereValues := generateWhereCQL(s.Relations(), s.Keys(), s.allowClusterSentinel)
+	whereCQL, whereValues := generateWhereCQL(s.Relations(), s.Keys(), s.clusteringSentinelsEnabled)
 	if whereCQL != "" {
 		query = append(query, "WHERE", whereCQL)
 		values = append(values, whereValues...)
@@ -174,7 +174,7 @@ func (s SelectStatement) Keys() Keys {
 // WithClusteringSentinel allows you to specify whether the use of the
 // clustering sentinel value is enabled
 func (s SelectStatement) WithClusteringSentinel(enabled bool) SelectStatement {
-	s.allowClusterSentinel = enabled
+	s.clusteringSentinelsEnabled = enabled
 	return s
 }
 
@@ -554,21 +554,21 @@ func generateUpdateSetCQL(fm map[string]interface{}) (string, []interface{}) {
 // a WHERE clause. An expected output may be something like:
 //	- "foo = ?", {1}
 //	- "foo = ? AND bar IN ?", {1, {"a", "b", "c"}}
-func generateWhereCQL(rs []Relation, keys Keys, allowClusterSentinel bool) (string, []interface{}) {
+func generateWhereCQL(rs []Relation, keys Keys, clusteringSentinelsEnabled bool) (string, []interface{}) {
 	clauses, values := make([]string, 0, len(rs)), make([]interface{}, 0, len(rs))
 	for _, relation := range rs {
-		clause, bindValue := generateRelationCQL(relation, keys, allowClusterSentinel)
+		clause, bindValue := generateRelationCQL(relation, keys, clusteringSentinelsEnabled)
 		clauses = append(clauses, clause)
 		values = append(values, bindValue)
 	}
 	return strings.Join(clauses, " AND "), values
 }
 
-func generateRelationCQL(rel Relation, keys Keys, allowClusterSentinel bool) (string, interface{}) {
+func generateRelationCQL(rel Relation, keys Keys, clusteringSentinelsEnabled bool) (string, interface{}) {
 	field := strings.ToLower(rel.Field())
 	switch rel.Comparator() {
 	case CmpEquality:
-		if isClusteringKeyField(rel.Field(), keys) && allowClusterSentinel {
+		if isClusteringKeyField(rel.Field(), keys) && clusteringSentinelsEnabled {
 			return field + " = ?", clusteringFieldOrSentinel(rel.Terms()[0])
 		}
 		return field + " = ?", rel.Terms()[0]
