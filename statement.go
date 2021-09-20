@@ -1,22 +1,32 @@
 package gocassa
 
 import (
+	"bytes"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
+)
+
+var (
+	// ClusteringSentinel represents a placeholder value to be used for cases
+	// where a value needs to be present (ie: a stand-in representing a
+	// clustering key that is empty)
+	ClusteringSentinel = "<gocassa.ClusteringSentinel>"
 )
 
 // SelectStatement represents a read (SELECT) query for some data in C*
 // It satisfies the Statement interface
 type SelectStatement struct {
-	keyspace       string                  // name of the keyspace
-	table          string                  // name of the table
-	fields         []string                // list of fields we want to select
-	where          []Relation              // where filter clauses
-	order          []ClusteringOrderColumn // order by clauses
-	limit          int                     // limit count, 0 means no limit
-	allowFiltering bool                    // whether we should allow filtering
-	keys           Keys                    // partition / clustering keys for table
+	keyspace                   string                  // name of the keyspace
+	table                      string                  // name of the table
+	fields                     []string                // list of fields we want to select
+	where                      []Relation              // where filter clauses
+	order                      []ClusteringOrderColumn // order by clauses
+	limit                      int                     // limit count, 0 means no limit
+	allowFiltering             bool                    // whether we should allow filtering
+	keys                       Keys                    // partition / clustering keys for table
+	clusteringSentinelsEnabled bool                    // whether we should enable our clustering sentinel
 }
 
 // NewSelectStatement adds the ability to craft a new SelectStatement
@@ -64,7 +74,7 @@ func (s SelectStatement) QueryAndValues() (string, []interface{}) {
 		fmt.Sprintf("FROM %s.%s", s.Keyspace(), s.Table()),
 	}
 
-	whereCQL, whereValues := generateWhereCQL(s.Relations())
+	whereCQL, whereValues := generateWhereCQL(s.Relations(), s.Keys(), s.clusteringSentinelsEnabled)
 	if whereCQL != "" {
 		query = append(query, "WHERE", whereCQL)
 		values = append(values, whereValues...)
@@ -161,14 +171,22 @@ func (s SelectStatement) Keys() Keys {
 	return s.keys
 }
 
+// WithClusteringSentinel allows you to specify whether the use of the
+// clustering sentinel value is enabled
+func (s SelectStatement) WithClusteringSentinel(enabled bool) SelectStatement {
+	s.clusteringSentinelsEnabled = enabled
+	return s
+}
+
 // InsertStatement represents an INSERT query to write some data in C*
 // It satisfies the Statement interface
 type InsertStatement struct {
-	keyspace string                 // name of the keyspace
-	table    string                 // name of the table
-	fieldMap map[string]interface{} // fields to be inserted
-	ttl      time.Duration          // ttl of the row
-	keys     Keys                   // partition / clustering keys for table
+	keyspace             string                 // name of the keyspace
+	table                string                 // name of the table
+	fieldMap             map[string]interface{} // fields to be inserted
+	ttl                  time.Duration          // ttl of the row
+	keys                 Keys                   // partition / clustering keys for table
+	allowClusterSentinel bool                   // whether we should enable our clustering sentinel
 }
 
 // NewInsertStatement adds the ability to craft a new InsertStatement
@@ -217,7 +235,11 @@ func (s InsertStatement) QueryAndValues() (string, []interface{}) {
 	for _, field := range sortedKeys(fieldMap) {
 		fieldNames = append(fieldNames, strings.ToLower(field))
 		placeholders = append(placeholders, "?")
-		values = append(values, fieldMap[field])
+		if isClusteringKeyField(field, s.keys) && s.allowClusterSentinel {
+			values = append(values, clusteringFieldOrSentinel(fieldMap[field]))
+		} else {
+			values = append(values, fieldMap[field])
+		}
 	}
 
 	query = append(query, "("+strings.Join(fieldNames, ", ")+")")
@@ -272,15 +294,23 @@ func (s InsertStatement) Keys() Keys {
 	return s.keys
 }
 
+// WithClusteringSentinel allows you to specify whether the use of the
+// clustering sentinel value is enabled
+func (s InsertStatement) WithClusteringSentinel(enabled bool) InsertStatement {
+	s.allowClusterSentinel = enabled
+	return s
+}
+
 // UpdateStatement represents an UPDATE query to update some data in C*
 // It satisfies the Statement interface
 type UpdateStatement struct {
-	keyspace string                 // name of the keyspace
-	table    string                 // name of the table
-	fieldMap map[string]interface{} // fields to be updated
-	where    []Relation             // where filter clauses
-	ttl      time.Duration          // ttl of the row
-	keys     Keys                   // partition / clustering keys for table
+	keyspace             string                 // name of the keyspace
+	table                string                 // name of the table
+	fieldMap             map[string]interface{} // fields to be updated
+	where                []Relation             // where filter clauses
+	ttl                  time.Duration          // ttl of the row
+	keys                 Keys                   // partition / clustering keys for table
+	allowClusterSentinel bool                   // whether we should enable our clustering sentinel
 }
 
 // NewUpdateStatement adds the ability to craft a new UpdateStatement
@@ -338,7 +368,7 @@ func (s UpdateStatement) QueryAndValues() (string, []interface{}) {
 	query = append(query, "SET", setCQL)
 	values = append(values, setValues...)
 
-	whereCQL, whereValues := generateWhereCQL(s.Relations())
+	whereCQL, whereValues := generateWhereCQL(s.Relations(), s.Keys(), s.allowClusterSentinel)
 	if whereCQL != "" {
 		query = append(query, "WHERE", whereCQL)
 		values = append(values, whereValues...)
@@ -392,13 +422,21 @@ func (s UpdateStatement) Keys() Keys {
 	return s.keys
 }
 
+// WithClusteringSentinel allows you to specify whether the use of the
+// clustering sentinel value is enabled
+func (s UpdateStatement) WithClusteringSentinel(enabled bool) UpdateStatement {
+	s.allowClusterSentinel = enabled
+	return s
+}
+
 // DeleteStatement represents a DELETE query to delete some data in C*
 // It satisfies the Statement interface
 type DeleteStatement struct {
-	keyspace string     // name of the keyspace
-	table    string     // name of the table
-	where    []Relation // where filter clauses
-	keys     Keys       // partition / clustering keys for table
+	keyspace             string     // name of the keyspace
+	table                string     // name of the table
+	where                []Relation // where filter clauses
+	keys                 Keys       // partition / clustering keys for table
+	allowClusterSentinel bool       // whether we should enable our clustering sentinel
 }
 
 // NewDeleteStatement adds the ability to craft a new DeleteStatement
@@ -439,7 +477,7 @@ func (s DeleteStatement) Values() []interface{} {
 // QueryAndValues returns the CQL query and any bind values
 func (s DeleteStatement) QueryAndValues() (string, []interface{}) {
 	query := fmt.Sprintf("DELETE FROM %s.%s", s.Keyspace(), s.Table())
-	whereCQL, whereValues := generateWhereCQL(s.Relations())
+	whereCQL, whereValues := generateWhereCQL(s.Relations(), s.Keys(), s.allowClusterSentinel)
 	if whereCQL != "" {
 		query += " WHERE " + whereCQL
 	}
@@ -465,6 +503,13 @@ func (s DeleteStatement) Relations() []Relation {
 // Keys provides the Partition / Clustering keys defined by the table recipe
 func (s DeleteStatement) Keys() Keys {
 	return s.keys
+}
+
+// WithClusteringSentinel allows you to specify whether the use of the
+// clustering sentinel value is enabled
+func (s DeleteStatement) WithClusteringSentinel(enabled bool) DeleteStatement {
+	s.allowClusterSentinel = enabled
+	return s
 }
 
 // cqlStatement represents a statement that executes raw CQL
@@ -509,20 +554,23 @@ func generateUpdateSetCQL(fm map[string]interface{}) (string, []interface{}) {
 // a WHERE clause. An expected output may be something like:
 //	- "foo = ?", {1}
 //	- "foo = ? AND bar IN ?", {1, {"a", "b", "c"}}
-func generateWhereCQL(rs []Relation) (string, []interface{}) {
+func generateWhereCQL(rs []Relation, keys Keys, clusteringSentinelsEnabled bool) (string, []interface{}) {
 	clauses, values := make([]string, 0, len(rs)), make([]interface{}, 0, len(rs))
 	for _, relation := range rs {
-		clause, bindValue := generateRelationCQL(relation)
+		clause, bindValue := generateRelationCQL(relation, keys, clusteringSentinelsEnabled)
 		clauses = append(clauses, clause)
 		values = append(values, bindValue)
 	}
 	return strings.Join(clauses, " AND "), values
 }
 
-func generateRelationCQL(rel Relation) (string, interface{}) {
+func generateRelationCQL(rel Relation, keys Keys, clusteringSentinelsEnabled bool) (string, interface{}) {
 	field := strings.ToLower(rel.Field())
 	switch rel.Comparator() {
 	case CmpEquality:
+		if isClusteringKeyField(rel.Field(), keys) && clusteringSentinelsEnabled {
+			return field + " = ?", clusteringFieldOrSentinel(rel.Terms()[0])
+		}
 		return field + " = ?", rel.Terms()[0]
 	case CmpIn:
 		return field + " IN ?", rel.Terms()
@@ -551,4 +599,54 @@ func generateOrderByCQL(order []ClusteringOrderColumn) string {
 		out = append(out, oc.Column+" "+oc.Direction.String())
 	}
 	return strings.Join(out, ", ")
+}
+
+// isClusteringKeyField determines whether the relation makes up the
+// clustering key of the statement
+func isClusteringKeyField(field string, keys Keys) bool {
+	for _, key := range keys.ClusteringColumns {
+		if strings.ToLower(key) == strings.ToLower(field) {
+			return true
+		}
+	}
+	return false
+}
+
+// clusteringFieldOrSentinel will check if we should substitute in our
+// sentinel value for empty clustering fields
+func clusteringFieldOrSentinel(term interface{}) interface{} {
+	switch v := term.(type) {
+	case string:
+		if len(v) == 0 {
+			return ClusteringSentinel
+		}
+		return v
+	case []byte:
+		if len(v) == 0 {
+			return []byte(ClusteringSentinel)
+		}
+		return v
+	default:
+		return term
+	}
+}
+
+// isClusteringSentinelValue returns a boolean on whether the value passed in
+// is the clustering sentinel value and what the non-sentinel value is
+func isClusteringSentinelValue(term interface{}) (bool, interface{}) {
+	val := reflect.ValueOf(term)
+	switch {
+	case val.Kind() == reflect.String:
+		if val.String() == ClusteringSentinel {
+			return true, reflect.New(val.Type()).Elem().Interface()
+		}
+		return false, term
+	case val.Kind() == reflect.Slice && val.Type().Elem().Kind() == reflect.Uint8:
+		if bytes.Equal(val.Bytes(), []byte(ClusteringSentinel)) {
+			return true, reflect.MakeSlice(val.Type(), 0, 0).Interface()
+		}
+		return false, term
+	default:
+		return false, term
+	}
 }

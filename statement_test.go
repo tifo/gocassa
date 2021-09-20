@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSelectStatement(t *testing.T) {
@@ -108,52 +109,158 @@ func TestDeleteStatement(t *testing.T) {
 	assert.Equal(t, []interface{}{"bar", []interface{}{"a", "b", "c"}}, stmt.Values())
 }
 
+func TestStatementsWithSentinel(t *testing.T) {
+	t.Run("SelectStatement", func(t *testing.T) {
+		fields := []string{"a", "b", "c"}
+		keys := Keys{PartitionKeys: []string{"a"}, ClusteringColumns: []string{"b"}}
+		stmt, err := NewSelectStatement("ks1", "tbl1", fields, nil, keys)
+		require.NoError(t, err)
+
+		stmt = stmt.WithRelations([]Relation{
+			Eq("a", "hello"),
+			Eq("b", ""),
+		})
+		assert.Equal(t, "SELECT a, b, c FROM ks1.tbl1 WHERE a = ? AND b = ?", stmt.Query())
+		assert.Equal(t, []interface{}{"hello", ""}, stmt.Values())
+
+		stmt = stmt.WithRelations([]Relation{
+			Eq("a", ""),
+			Eq("b", ""),
+		})
+		stmt = stmt.WithClusteringSentinel(true)
+		assert.Equal(t, "SELECT a, b, c FROM ks1.tbl1 WHERE a = ? AND b = ?", stmt.Query())
+		assert.Equal(t, []interface{}{"", ClusteringSentinel}, stmt.Values())
+	})
+
+	t.Run("InsertStatement", func(t *testing.T) {
+		fieldMap := map[string]interface{}{"a": "", "b": "", "c": ""}
+		keys := Keys{PartitionKeys: []string{"a"}, ClusteringColumns: []string{"b"}}
+
+		stmt, err := NewInsertStatement("ks1", "tbl1", fieldMap, keys)
+		assert.NoError(t, err)
+		assert.Equal(t, "INSERT INTO ks1.tbl1 (a, b, c) VALUES (?, ?, ?)", stmt.Query())
+		assert.Equal(t, []interface{}{"", "", ""}, stmt.Values())
+
+		stmt = stmt.WithClusteringSentinel(true)
+		assert.Equal(t, "INSERT INTO ks1.tbl1 (a, b, c) VALUES (?, ?, ?)", stmt.Query())
+		assert.Equal(t, []interface{}{"", ClusteringSentinel, ""}, stmt.Values())
+	})
+
+	t.Run("UpdateStatement", func(t *testing.T) {
+		fieldMap := map[string]interface{}{"c": ""}
+		keys := Keys{PartitionKeys: []string{"a"}, ClusteringColumns: []string{"b"}}
+		relations := []Relation{
+			Eq("a", ""),
+			Eq("b", ""),
+		}
+
+		stmt, err := NewUpdateStatement("ks1", "tbl1", fieldMap, relations, keys)
+		assert.NoError(t, err)
+		assert.Equal(t, "UPDATE ks1.tbl1 SET c = ? WHERE a = ? AND b = ?", stmt.Query())
+		assert.Equal(t, []interface{}{"", "", ""}, stmt.Values())
+
+		stmt = stmt.WithClusteringSentinel(true)
+		assert.Equal(t, "UPDATE ks1.tbl1 SET c = ? WHERE a = ? AND b = ?", stmt.Query())
+		assert.Equal(t, []interface{}{"", "", ClusteringSentinel}, stmt.Values())
+	})
+
+	t.Run("DeleteStatement", func(t *testing.T) {
+		keys := Keys{PartitionKeys: []string{"a"}, ClusteringColumns: []string{"b"}}
+		relations := []Relation{
+			Eq("a", ""),
+			Eq("b", ""),
+		}
+
+		stmt, err := NewDeleteStatement("ks1", "tbl1", relations, keys)
+		assert.NoError(t, err)
+		assert.Equal(t, "DELETE FROM ks1.tbl1 WHERE a = ? AND b = ?", stmt.Query())
+		assert.Equal(t, []interface{}{"", ""}, stmt.Values())
+
+		stmt = stmt.WithClusteringSentinel(true)
+		assert.Equal(t, "DELETE FROM ks1.tbl1 WHERE a = ? AND b = ?", stmt.Query())
+		assert.Equal(t, []interface{}{"", ClusteringSentinel}, stmt.Values())
+	})
+}
+
 func TestGenerateWhereCQL(t *testing.T) {
 	stmt, values := generateWhereCQL([]Relation{
 		Eq("foo", "bar"),
-	})
+	}, Keys{}, false)
 	assert.Equal(t, "foo = ?", stmt)
 	assert.Equal(t, []interface{}{"bar"}, values)
 
 	stmt, values = generateWhereCQL([]Relation{
 		Eq("foo", "bar"),
 		In("baz", "a", "b", "c"),
-	})
+	}, Keys{}, false)
 	assert.Equal(t, "foo = ? AND baz IN ?", stmt)
 	assert.Equal(t, []interface{}{"bar", []interface{}{"a", "b", "c"}}, values)
+
+	stmt, values = generateWhereCQL([]Relation{
+		Eq("foo", "bar"),
+	}, Keys{ClusteringColumns: []string{"foo"}}, true)
+	assert.Equal(t, "foo = ?", stmt)
+	assert.Equal(t, []interface{}{"bar"}, values)
+
+	stmt, values = generateWhereCQL([]Relation{
+		Eq("foo", ""),
+	}, Keys{ClusteringColumns: []string{"foo"}}, true)
+	assert.Equal(t, "foo = ?", stmt)
+	assert.Equal(t, []interface{}{ClusteringSentinel}, values)
+
+	stmt, values = generateWhereCQL([]Relation{
+		Eq("bar", ""),
+	}, Keys{ClusteringColumns: []string{"foo"}}, true)
+	assert.Equal(t, "bar = ?", stmt)
+	assert.Equal(t, []interface{}{""}, values)
 }
 
 func TestGenerateRelationCQL(t *testing.T) {
-	stmt, value := generateRelationCQL(Eq("foo", "bar"))
+	stmt, value := generateRelationCQL(Eq("foo", "bar"), Keys{}, false)
 	assert.Equal(t, "foo = ?", stmt)
 	assert.Equal(t, "bar", value)
 
-	stmt, value = generateRelationCQL(Eq("FoO", "BAR"))
+	stmt, value = generateRelationCQL(Eq("FoO", "BAR"), Keys{}, false)
 	assert.Equal(t, "foo = ?", stmt)
 	assert.Equal(t, "BAR", value)
 
-	stmt, value = generateRelationCQL(In("foo", "a", "b", "c"))
+	stmt, value = generateRelationCQL(Eq("foo", ""),
+		Keys{ClusteringColumns: []string{"foo"}}, true)
+	assert.Equal(t, "foo = ?", stmt)
+	assert.Equal(t, ClusteringSentinel, value)
+
+	stmt, value = generateRelationCQL(Eq("FoO", ""),
+		Keys{ClusteringColumns: []string{"foo"}}, true)
+	assert.Equal(t, "foo = ?", stmt)
+	assert.Equal(t, ClusteringSentinel, value)
+
+	stmt, value = generateRelationCQL(Eq("FoO", 0),
+		Keys{ClusteringColumns: []string{"foo"}}, true)
+	assert.Equal(t, "foo = ?", stmt)
+	assert.Equal(t, 0, value)
+
+	stmt, value = generateRelationCQL(In("foo", "a", "b", "c"), Keys{}, false)
 	assert.Equal(t, "foo IN ?", stmt)
 	assert.Equal(t, []interface{}{"a", "b", "c"}, value)
 
-	stmt, value = generateRelationCQL(GT("foo", 1))
+	stmt, value = generateRelationCQL(GT("foo", 1), Keys{}, false)
 	assert.Equal(t, "foo > ?", stmt)
 	assert.Equal(t, 1, value)
 
-	stmt, value = generateRelationCQL(GTE("foo", 1))
+	stmt, value = generateRelationCQL(GTE("foo", 1), Keys{}, false)
 	assert.Equal(t, "foo >= ?", stmt)
 	assert.Equal(t, 1, value)
 
-	stmt, value = generateRelationCQL(LT("foo", 1))
+	stmt, value = generateRelationCQL(LT("foo", 1), Keys{}, false)
 	assert.Equal(t, "foo < ?", stmt)
 	assert.Equal(t, 1, value)
 
-	stmt, value = generateRelationCQL(LTE("foo", 1))
+	stmt, value = generateRelationCQL(LTE("foo", 1), Keys{}, false)
 	assert.Equal(t, "foo <= ?", stmt)
 	assert.Equal(t, 1, value)
 
 	assert.PanicsWithValue(t, "unknown comparator -1", func() {
-		stmt, value = generateRelationCQL(Relation{cmp: -1})
+		stmt, value = generateRelationCQL(Relation{cmp: -1}, Keys{}, false)
 	})
 }
 
@@ -171,4 +278,109 @@ func TestGenerateOrderByCQL(t *testing.T) {
 		{Column: "bar", Direction: DESC},
 	})
 	assert.Equal(t, "foo ASC, bar DESC", stmt)
+}
+
+func TestClusteringFieldOrSentinel(t *testing.T) {
+	assert.Equal(t, ClusteringSentinel, clusteringFieldOrSentinel(""))
+	assert.Equal(t, "foo", clusteringFieldOrSentinel("foo"))
+
+	assert.Equal(t, []byte(ClusteringSentinel), clusteringFieldOrSentinel([]byte{}))
+	assert.Equal(t, []byte{0x00}, clusteringFieldOrSentinel([]byte{0x00}))
+
+	assert.Equal(t, 0, clusteringFieldOrSentinel(0))
+	assert.Equal(t, 42, clusteringFieldOrSentinel(42))
+	assert.Equal(t, struct{}{}, clusteringFieldOrSentinel(struct{}{}))
+}
+
+func TestIsClusteringSentinelValue(t *testing.T) {
+	type fooString string
+	type fooSlice []byte
+
+	testCases := []struct {
+		desc               string
+		input              interface{}
+		expectedIsSentinel bool
+		expectedOutput     interface{}
+	}{
+		{
+			desc:               "sentinel string",
+			input:              ClusteringSentinel,
+			expectedIsSentinel: true,
+			expectedOutput:     "",
+		},
+		{
+			desc:               "indirect sentinel string",
+			input:              fooString(ClusteringSentinel),
+			expectedIsSentinel: true,
+			expectedOutput:     fooString(""),
+		},
+		{
+			desc:               "empty string",
+			input:              "",
+			expectedIsSentinel: false,
+			expectedOutput:     "",
+		},
+		{
+			desc:               "other string",
+			input:              "foo",
+			expectedIsSentinel: false,
+			expectedOutput:     "foo",
+		},
+		{
+			desc:               "sentinel slice",
+			input:              []byte(ClusteringSentinel),
+			expectedIsSentinel: true,
+			expectedOutput:     []byte{},
+		},
+		{
+			desc:               "indirect sentinel slice",
+			input:              fooSlice(ClusteringSentinel),
+			expectedIsSentinel: true,
+			expectedOutput:     fooSlice{},
+		},
+		{
+			desc:               "nil slice",
+			input:              []byte(nil),
+			expectedIsSentinel: false,
+			expectedOutput:     []byte(nil),
+		},
+		{
+			desc:               "empty byte slice",
+			input:              []byte{},
+			expectedIsSentinel: false,
+			expectedOutput:     []byte{},
+		},
+		{
+			desc:               "other byte slice",
+			input:              []byte{0x00},
+			expectedIsSentinel: false,
+			expectedOutput:     []byte{0x00},
+		},
+		{
+			desc:               "int zero",
+			input:              0,
+			expectedIsSentinel: false,
+			expectedOutput:     0,
+		},
+		{
+			desc:               "int 42",
+			input:              42,
+			expectedIsSentinel: false,
+			expectedOutput:     42,
+		},
+		{
+			desc:               "empty struct",
+			input:              struct{}{},
+			expectedIsSentinel: false,
+			expectedOutput:     struct{}{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			isSentinel, nonSentinelVal := isClusteringSentinelValue(tc.input)
+			assert.Equal(t, tc.expectedIsSentinel, isSentinel)
+			assert.Equal(t, tc.expectedOutput, nonSentinelVal)
+		})
+	}
 }
