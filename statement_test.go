@@ -379,6 +379,12 @@ func TestIsClusteringSentinelValue(t *testing.T) {
 			expectedOutput:     time.Time{},
 		},
 		{
+			desc:               "time struct with value",
+			input:              time.Unix(10, 0),
+			expectedIsSentinel: false,
+			expectedOutput:     time.Unix(10, 0),
+		},
+		{
 			desc:               "sentinel time struct",
 			input:              ClusteringSentinelTimestamp,
 			expectedIsSentinel: true,
@@ -389,6 +395,12 @@ func TestIsClusteringSentinelValue(t *testing.T) {
 			input:              fooTime{},
 			expectedIsSentinel: false,
 			expectedOutput:     fooTime{},
+		},
+		{
+			desc:               "indirect time struct with value",
+			input:              fooTime(time.Unix(10, 0)),
+			expectedIsSentinel: false,
+			expectedOutput:     fooTime(time.Unix(10, 0)),
 		},
 		{
 			desc:               "indirect sentinel time struct",
