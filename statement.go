@@ -13,6 +13,11 @@ var (
 	// where a value needs to be present (ie: a stand-in representing a
 	// clustering key that is empty)
 	ClusteringSentinel = "<gocassa.ClusteringSentinel>"
+
+	// ClusteringSentinelTimestamp represents a placeholder time value for
+	// cases where we have a null timestamp column. We've chosen the time
+	// 1753-01-01 which ironically is the minimum date in SQL Server
+	ClusteringSentinelTimestamp = time.Unix(-6847804725, 0)
 )
 
 // SelectStatement represents a read (SELECT) query for some data in C*
@@ -236,7 +241,7 @@ func (s InsertStatement) QueryAndValues() (string, []interface{}) {
 		fieldNames = append(fieldNames, strings.ToLower(field))
 		placeholders = append(placeholders, "?")
 		if isClusteringKeyField(field, s.keys) && s.allowClusterSentinel {
-			values = append(values, clusteringFieldOrSentinel(fieldMap[field]))
+			values = append(values, ClusteringFieldOrSentinel(fieldMap[field]))
 		} else {
 			values = append(values, fieldMap[field])
 		}
@@ -569,7 +574,7 @@ func generateRelationCQL(rel Relation, keys Keys, clusteringSentinelsEnabled boo
 	switch rel.Comparator() {
 	case CmpEquality:
 		if isClusteringKeyField(rel.Field(), keys) && clusteringSentinelsEnabled {
-			return field + " = ?", clusteringFieldOrSentinel(rel.Terms()[0])
+			return field + " = ?", ClusteringFieldOrSentinel(rel.Terms()[0])
 		}
 		return field + " = ?", rel.Terms()[0]
 	case CmpIn:
@@ -612,9 +617,9 @@ func isClusteringKeyField(field string, keys Keys) bool {
 	return false
 }
 
-// clusteringFieldOrSentinel will check if we should substitute in our
+// ClusteringFieldOrSentinel will check if we should substitute in our
 // sentinel value for empty clustering fields
-func clusteringFieldOrSentinel(term interface{}) interface{} {
+func ClusteringFieldOrSentinel(term interface{}) interface{} {
 	switch v := term.(type) {
 	case string:
 		if len(v) == 0 {
@@ -626,14 +631,19 @@ func clusteringFieldOrSentinel(term interface{}) interface{} {
 			return []byte(ClusteringSentinel)
 		}
 		return v
+	case time.Time:
+		if v.IsZero() {
+			return ClusteringSentinelTimestamp
+		}
+		return v
 	default:
 		return term
 	}
 }
 
-// isClusteringSentinelValue returns a boolean on whether the value passed in
+// IsClusteringSentinelValue returns a boolean on whether the value passed in
 // is the clustering sentinel value and what the non-sentinel value is
-func isClusteringSentinelValue(term interface{}) (bool, interface{}) {
+func IsClusteringSentinelValue(term interface{}) (bool, interface{}) {
 	val := reflect.ValueOf(term)
 	switch {
 	case val.Kind() == reflect.String:
@@ -644,6 +654,15 @@ func isClusteringSentinelValue(term interface{}) (bool, interface{}) {
 	case val.Kind() == reflect.Slice && val.Type().Elem().Kind() == reflect.Uint8:
 		if bytes.Equal(val.Bytes(), []byte(ClusteringSentinel)) {
 			return true, reflect.MakeSlice(val.Type(), 0, 0).Interface()
+		}
+		return false, term
+	case val.Kind() == reflect.Struct:
+		timeTyp := reflect.TypeOf(time.Time{})
+		if val.Type().ConvertibleTo(timeTyp) {
+			convertedTerm := val.Convert(timeTyp).Interface().(time.Time)
+			if convertedTerm.Equal(ClusteringSentinelTimestamp) {
+				return true, reflect.New(val.Type()).Elem().Interface()
+			}
 		}
 		return false, term
 	default:

@@ -281,20 +281,24 @@ func TestGenerateOrderByCQL(t *testing.T) {
 }
 
 func TestClusteringFieldOrSentinel(t *testing.T) {
-	assert.Equal(t, ClusteringSentinel, clusteringFieldOrSentinel(""))
-	assert.Equal(t, "foo", clusteringFieldOrSentinel("foo"))
+	assert.Equal(t, ClusteringSentinel, ClusteringFieldOrSentinel(""))
+	assert.Equal(t, "foo", ClusteringFieldOrSentinel("foo"))
 
-	assert.Equal(t, []byte(ClusteringSentinel), clusteringFieldOrSentinel([]byte{}))
-	assert.Equal(t, []byte{0x00}, clusteringFieldOrSentinel([]byte{0x00}))
+	assert.Equal(t, []byte(ClusteringSentinel), ClusteringFieldOrSentinel([]byte{}))
+	assert.Equal(t, []byte{0x00}, ClusteringFieldOrSentinel([]byte{0x00}))
 
-	assert.Equal(t, 0, clusteringFieldOrSentinel(0))
-	assert.Equal(t, 42, clusteringFieldOrSentinel(42))
-	assert.Equal(t, struct{}{}, clusteringFieldOrSentinel(struct{}{}))
+	assert.Equal(t, ClusteringSentinelTimestamp, ClusteringFieldOrSentinel(time.Time{}))
+	assert.Equal(t, time.Unix(10, 0), ClusteringFieldOrSentinel(time.Unix(10, 0)))
+
+	assert.Equal(t, 0, ClusteringFieldOrSentinel(0))
+	assert.Equal(t, 42, ClusteringFieldOrSentinel(42))
+	assert.Equal(t, struct{}{}, ClusteringFieldOrSentinel(struct{}{}))
 }
 
 func TestIsClusteringSentinelValue(t *testing.T) {
 	type fooString string
 	type fooSlice []byte
+	type fooTime time.Time
 
 	testCases := []struct {
 		desc               string
@@ -369,6 +373,42 @@ func TestIsClusteringSentinelValue(t *testing.T) {
 			expectedOutput:     42,
 		},
 		{
+			desc:               "time struct",
+			input:              time.Time{},
+			expectedIsSentinel: false,
+			expectedOutput:     time.Time{},
+		},
+		{
+			desc:               "time struct with value",
+			input:              time.Unix(10, 0),
+			expectedIsSentinel: false,
+			expectedOutput:     time.Unix(10, 0),
+		},
+		{
+			desc:               "sentinel time struct",
+			input:              ClusteringSentinelTimestamp,
+			expectedIsSentinel: true,
+			expectedOutput:     time.Time{},
+		},
+		{
+			desc:               "indirect time struct",
+			input:              fooTime{},
+			expectedIsSentinel: false,
+			expectedOutput:     fooTime{},
+		},
+		{
+			desc:               "indirect time struct with value",
+			input:              fooTime(time.Unix(10, 0)),
+			expectedIsSentinel: false,
+			expectedOutput:     fooTime(time.Unix(10, 0)),
+		},
+		{
+			desc:               "indirect sentinel time struct",
+			input:              fooTime(ClusteringSentinelTimestamp),
+			expectedIsSentinel: true,
+			expectedOutput:     fooTime{},
+		},
+		{
 			desc:               "empty struct",
 			input:              struct{}{},
 			expectedIsSentinel: false,
@@ -378,7 +418,7 @@ func TestIsClusteringSentinelValue(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			isSentinel, nonSentinelVal := isClusteringSentinelValue(tc.input)
+			isSentinel, nonSentinelVal := IsClusteringSentinelValue(tc.input)
 			assert.Equal(t, tc.expectedIsSentinel, isSentinel)
 			assert.Equal(t, tc.expectedOutput, nonSentinelVal)
 		})

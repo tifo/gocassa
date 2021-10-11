@@ -219,7 +219,7 @@ func removeSentinelValues(ptrs []interface{}) {
 		}
 
 		elem := reflect.ValueOf(ptr).Elem()
-		if isSentinel, nonSentinelValue := isClusteringSentinelValue(elem.Interface()); isSentinel {
+		if isSentinel, nonSentinelValue := IsClusteringSentinelValue(elem.Interface()); isSentinel {
 			elem.Set(reflect.ValueOf(nonSentinelValue))
 		}
 	}
