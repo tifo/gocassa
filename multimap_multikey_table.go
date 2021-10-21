@@ -96,23 +96,3 @@ func (mm *multimapMkT) ListOfEqualRelations(fieldsToIndex, ids map[string]interf
 
 	return relations
 }
-
-func (mm *multimapMkT) ListOfInRelations(fieldsToIndex, ids map[string][]interface{}) []Relation {
-	relations := make([]Relation, 0)
-
-	for _, field := range mm.fieldsToIndexBy {
-		if value := fieldsToIndex[field]; value != nil && len(value) > 0 {
-			relation := In(field, value)
-			relations = append(relations, relation)
-		}
-	}
-
-	for _, field := range mm.idField {
-		if value := ids[field]; value != nil && len(value) > 0 {
-			relation := In(field, value)
-			relations = append(relations, relation)
-		}
-	}
-
-	return relations
-}
