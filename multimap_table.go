@@ -47,13 +47,6 @@ func (mm *multimapT) Read(field, id, pointer interface{}) Op {
 		ReadOne(pointer)
 }
 
-func (mm *multimapT) MultiRead(field interface{}, ids []interface{}, pointerToASlice interface{}) Op {
-	return mm.Table().
-		Where(Eq(mm.fieldToIndexBy, field),
-			In(mm.idField, ids...)).
-		Read(pointerToASlice)
-}
-
 func (mm *multimapT) List(field, startId interface{}, limit int, pointerToASlice interface{}) Op {
 	rels := []Relation{Eq(mm.fieldToIndexBy, field)}
 	if startId != nil {

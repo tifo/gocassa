@@ -121,6 +121,10 @@ func Eq(field string, term interface{}) Relation {
 	}
 }
 
+// In allows a field to be queried with multiple terms simultaneously
+// Note: In should only be used for Primary Key columns. Usage for
+// clustering key columns may result in an error depending on backing
+// storage implementation
 func In(field string, terms ...interface{}) Relation {
 	return Relation{
 		cmp:   CmpIn,

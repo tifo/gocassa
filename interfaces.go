@@ -100,7 +100,6 @@ type MultimapTable interface {
 	DeleteAll(value interface{}) Op
 	List(partitionKey, clusteringKey interface{}, limit int, pointerToASlice interface{}) Op
 	Read(partitionKey, clusteringKey, pointer interface{}) Op
-	MultiRead(partitionKey interface{}, ids []interface{}, pointerToASlice interface{}) Op
 	WithOptions(Options) MultimapTable
 	Table() Table
 	TableChanger
