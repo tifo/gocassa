@@ -87,8 +87,11 @@ func (s *scanner) iterSlice(iter Scannable) (int, error) {
 		sliceElem.Set(reflect.Append(sliceElem, wrapPtrValue(outVal, sliceElemType)))
 		rowsScanned++
 	}
-
 	s.rowsScanned += rowsScanned
+
+	if err := iter.Err(); err != nil {
+		return rowsScanned, err
+	}
 	return rowsScanned, nil
 }
 
