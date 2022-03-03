@@ -326,15 +326,6 @@ func (s *MockSuite) TestMultiMapTableRead() {
 	s.Equal("Joe", u.Name)
 }
 
-func (s *MockSuite) TestMultiMapTableMultiRead() {
-	s.insertUsers()
-	var users []user
-	s.NoError(s.mmapTbl.MultiRead(1, []interface{}{1, 2}, &users).Run())
-	s.Len(users, 2)
-	s.Equal("Jane", users[0].Name)
-	s.Equal("Joe", users[1].Name)
-}
-
 func (s *MockSuite) TestMultiMapTableList() {
 	s.insertUsers()
 	var users []user
