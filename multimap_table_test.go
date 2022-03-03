@@ -88,43 +88,6 @@ func TestMultimapTableDelete(t *testing.T) {
 	}
 }
 
-func TestMultimapTableMultiRead(t *testing.T) {
-	tbl := ns.MultimapTable("customer93", "Tag", "Id", Customer2{})
-	createIf(tbl.(TableChanger), t)
-	joe := Customer2{
-		Id:   "33",
-		Name: "Joe",
-		Tag:  "A",
-	}
-	err := tbl.Set(joe).Run()
-	if err != nil {
-		t.Fatal(err)
-	}
-	jane := Customer2{
-		Id:   "34",
-		Name: "Jane",
-		Tag:  "A",
-	}
-	err = tbl.Set(jane).Run()
-	if err != nil {
-		t.Fatal(err)
-	}
-	customers := &[]Customer2{}
-	err = tbl.MultiRead("A", []interface{}{"33", "34"}, customers).Run()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(*customers) != 2 {
-		t.Fatalf("Expected to multiread 2 records, got %d", len(*customers))
-	}
-	if !reflect.DeepEqual((*customers)[0], joe) {
-		t.Fatalf("Expected to find joe, got %v", (*customers)[0])
-	}
-	if !reflect.DeepEqual((*customers)[1], jane) {
-		t.Fatalf("Expected to find jane, got %v", (*customers)[1])
-	}
-}
-
 func TestMultimapTableMultiListOrder(t *testing.T) {
 	tbl := ns.MultimapTable("customer93", "Tag", "Id", Customer2{})
 	createIf(tbl.(TableChanger), t)
