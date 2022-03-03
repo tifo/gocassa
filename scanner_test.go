@@ -117,6 +117,16 @@ func TestScanIterSlice(t *testing.T) {
 	_, err = NewScanner(stmt, &i1).ScanIter(iter)
 	assert.Error(t, err)
 	iter.Reset()
+
+	// Test decoding with an error
+	var j1 []fakeStruct
+	errorerIter := newMockIterator([]map[string]interface{}{}, stmt.fields)
+	errorScanner := NewScanner(stmt, &j1)
+	expectedErr := fmt.Errorf("Something went baaaad")
+	errorerIter.err = expectedErr
+	rowsRead, err = errorScanner.ScanIter(errorerIter)
+	assert.Equal(t, 0, rowsRead)
+	assert.Equal(t, err, expectedErr)
 }
 
 func TestScanIterStruct(t *testing.T) {
