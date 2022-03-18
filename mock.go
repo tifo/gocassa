@@ -90,7 +90,11 @@ func (mo mockMultiOp) Run() error {
 	if err := mo.Preflight(); err != nil {
 		return err
 	}
-	for _, op := range mo {
+	for i, op := range mo {
+		shouldFailFn := getShouldFailFn(op.Options().Context)
+		if failWithErr := shouldFailFn(i, len(mo)); failWithErr != nil {
+			return failWithErr
+		}
 		if err := op.Run(); err != nil {
 			return err
 		}
@@ -907,5 +911,33 @@ func assignRecords(m map[string]interface{}, record map[string]interface{}) erro
 		}
 	}
 
+	return nil
+}
+
+type mockContextKey string
+
+var partialFailureContextKey mockContextKey = "partial_failure"
+
+type ShouldFailFunc func(opIdx, opCount int) error
+
+func PartialFailureContext(parent context.Context, shouldFail ShouldFailFunc) context.Context {
+	return context.WithValue(parent, partialFailureContextKey, shouldFail)
+}
+
+func getShouldFailFn(ctx context.Context) ShouldFailFunc {
+	if ctx != nil {
+		if fn := extractShouldFailFnFromContext(ctx); fn != nil {
+			return fn
+		}
+	}
+	return func(int, int) error { return nil }
+}
+
+func extractShouldFailFnFromContext(ctx context.Context) ShouldFailFunc {
+	if v := ctx.Value(partialFailureContextKey); v != nil {
+		if fn, ok := v.(ShouldFailFunc); ok {
+			return fn
+		}
+	}
 	return nil
 }
