@@ -2,10 +2,12 @@ package gocassa
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -777,4 +779,86 @@ func (s *MockIteratorSuite) TestValidValues() {
 	s.NoError(iter.Scan(&a1, &b1))
 	s.Equal(t, a1)
 	s.Equal(time.Time{}, b1)
+}
+
+func TestErrorInjectors(t *testing.T) {
+	type Thing struct {
+		ID    string
+		Field string
+	}
+	things := []Thing{
+		{ID: "1", Field: "one"},
+		{ID: "2", Field: "two"},
+		{ID: "3", Field: "three"},
+	}
+	errToInject := fmt.Errorf("injected error")
+
+	t.Run("NeverFail", func(t *testing.T) {
+		ks := NewMockKeySpace()
+		table := ks.MapTable("table_name", "ID", Thing{})
+
+		op := Noop()
+		for _, thing := range things {
+			op = op.Add(table.Set(thing))
+		}
+		ctx := ErrorInjectorContext(context.Background(), &neverFail{})
+		err := op.RunWithContext(ctx)
+		assert.NoError(t, err)
+
+		for _, thing := range things {
+			readThing := Thing{}
+			err := table.Read(thing.ID, &readThing).RunWithContext(context.Background())
+			require.NoError(t, err)
+			assert.Equal(t, thing, readThing)
+		}
+	})
+
+	t.Run("FailOnNthOperation", func(t *testing.T) {
+		ks := NewMockKeySpace()
+		table := ks.MapTable("table_name", "ID", Thing{})
+
+		op := Noop()
+		for _, thing := range things {
+			op = op.Add(table.Set(thing))
+		}
+		ctx := ErrorInjectorContext(context.Background(), FailOnNthOperation(2, errToInject))
+		err := op.RunWithContext(ctx)
+		assert.Equal(t, errToInject, err)
+	})
+
+	t.Run("FailOnEachOperation", func(t *testing.T) {
+		ks := NewMockKeySpace()
+		table := ks.MapTable("table_name", "ID", Thing{})
+
+		op := Noop()
+		for _, thing := range things {
+			op = op.Add(table.Set(thing))
+		}
+		errorInjector := FailOnEachOperation(errToInject)
+		ctx := ErrorInjectorContext(context.Background(), errorInjector)
+
+		ops, ok := op.(mockMultiOp)
+		require.True(t, ok)
+
+		for i := 0; i < len(ops); i++ {
+			err := op.RunWithContext(ctx)
+			assert.Equal(t, errToInject, err)
+			assert.True(t, errorInjector.ShouldContinue())
+			assert.Equal(t, i, errorInjector.LastErrorInjectedAtIdx())
+		}
+
+		// After we've failed on all the operations, the error injector should
+		// stop injecting errors, allowing the operation to succeed
+		err := op.RunWithContext(ctx)
+		assert.NoError(t, err)
+		assert.False(t, errorInjector.ShouldContinue())
+		assert.Equal(t, -1, errorInjector.LastErrorInjectedAtIdx())
+
+		for _, thing := range things {
+			readThing := Thing{}
+			err := table.Read(thing.ID, &readThing).RunWithContext(context.Background())
+			require.NoError(t, err)
+			assert.Equal(t, thing, readThing)
+		}
+	})
 }

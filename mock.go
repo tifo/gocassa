@@ -90,7 +90,11 @@ func (mo mockMultiOp) Run() error {
 	if err := mo.Preflight(); err != nil {
 		return err
 	}
-	for _, op := range mo {
+	for i, op := range mo {
+		errorInjector := getErrorInjector(op.Options().Context)
+		if errToReturn := errorInjector.shouldReturnErr(op, i, len(mo)); errToReturn != nil {
+			return errToReturn
+		}
 		if err := op.Run(); err != nil {
 			return err
 		}
@@ -908,4 +912,151 @@ func assignRecords(m map[string]interface{}, record map[string]interface{}) erro
 	}
 
 	return nil
+}
+
+type mockContextKey string
+
+var errorInjectorContextKey mockContextKey = "error_injector_context_key"
+
+type ErrorInjector interface {
+	shouldReturnErr(op Op, opIdx int, opCount int) error
+}
+
+func getErrorInjector(ctx context.Context) ErrorInjector {
+	if ctx != nil {
+		if strategy := extractErrorInjectorFromContext(ctx); strategy != nil {
+			return strategy
+		}
+	}
+	return &neverFail{}
+}
+
+func extractErrorInjectorFromContext(ctx context.Context) ErrorInjector {
+	if v := ctx.Value(errorInjectorContextKey); v != nil {
+		if strategy, ok := v.(ErrorInjector); ok {
+			return strategy
+		}
+	}
+	return nil
+}
+
+// ErrorInjectorContext returns a context which when passed to
+// mockMultiOp.RunWithContext(...), will inject an error before one of the
+// operations to simulate a partial failure in the query execution.
+// The ErrorInjector determines when in the sequence the error is injected
+func ErrorInjectorContext(parent context.Context, strategy ErrorInjector) context.Context {
+	return context.WithValue(parent, errorInjectorContextKey, strategy)
+}
+
+type neverFail struct{}
+
+func (n *neverFail) shouldReturnErr(Op, int, int) error { return nil }
+
+// FailOnNthOperation returns an ErrorInjector which injects the provided err on
+// the nth operation of a mockMultiOp. n is 0 indexed so an n value of 0 will
+// fail on the first operation. If there are fewer than n-1 operations in the
+// mockMultiOp, no error will be injected
+func FailOnNthOperation(n int, err error) ErrorInjector {
+	return &failOnNthOperation{n: n, err: err}
+}
+
+type failOnNthOperation struct {
+	n   int
+	err error
+}
+
+func (f *failOnNthOperation) shouldReturnErr(op Op, opIdx, opCount int) error {
+	if opIdx == f.n {
+		return f.err
+	}
+	return nil
+}
+
+// FailOnEachOperation returns an ErrorInjector which fails on each operation of
+// a mockMultiOp in turn
+func FailOnEachOperation(err error) *FailOnEachOperationErrorInjector {
+	return &FailOnEachOperationErrorInjector{
+		err:                    err,
+		finalOpSucceeded:       false,
+		lastErrorInjectedAtIdx: -1,
+	}
+}
+
+// FailOnEachOperationErrorInjector is a stateful ErrorInjector which fails on
+// each each operation of a mockMultiOp. The caller should repeatedly call the
+// function under test until ShouldContinue returns false.
+type FailOnEachOperationErrorInjector struct {
+	shouldFailOnOp         int
+	lastErrorInjectedAtIdx int
+	finalOpSucceeded       bool
+	err                    error
+}
+
+// LastErrorInjectedAtIdx indicates the index of the operation the error
+// injector last injected an error at. Returns -1 if no error was injected
+func (f *FailOnEachOperationErrorInjector) LastErrorInjectedAtIdx() int {
+	return f.lastErrorInjectedAtIdx
+}
+
+// ShouldContinue indicates whether there are more operations in the mockMultiOp
+// in which to inject errors. Returns false when the final operation in the
+// mockMultiOp succeeded
+func (f *FailOnEachOperationErrorInjector) ShouldContinue() bool {
+	if f.finalOpSucceeded {
+		return false
+	}
+	return true
+}
+
+func (f *FailOnEachOperationErrorInjector) shouldReturnErr(op Op, opIdx, opCount int) error {
+	if opIdx == f.shouldFailOnOp {
+		f.shouldFailOnOp++
+		f.lastErrorInjectedAtIdx = opIdx
+		return f.err
+	}
+	if opIdx == opCount-1 {
+		f.lastErrorInjectedAtIdx = -1
+		f.finalOpSucceeded = true
+	}
+	return nil
+}
+
+func ExampleFailOnEachOperation() {
+	ks := NewMockKeySpace()
+	type Thing struct {
+		ID    string
+		Field string
+	}
+
+	table := ks.MapTable(
+		"table_name",
+		"ID",
+		Thing{},
+	)
+
+	things := []Thing{
+		{ID: "1", Field: "one"},
+		{ID: "2", Field: "two"},
+		{ID: "3", Field: "three"},
+		{ID: "4", Field: "four"},
+		{ID: "5", Field: "five"},
+	}
+	op := Noop()
+	for _, thing := range things {
+		op = op.Add(table.Set(thing))
+	}
+
+	errToInject := fmt.Errorf("injected error")
+	errorInjector := FailOnEachOperation(errToInject)
+	ctx := ErrorInjectorContext(context.Background(), errorInjector)
+
+	for errorInjector.ShouldContinue() {
+		if err := op.RunWithContext(ctx); err != nil {
+			fmt.Printf(
+				"received error: %s on operation: %d\n",
+				err,
+				errorInjector.LastErrorInjectedAtIdx(),
+			)
+		}
+	}
 }
