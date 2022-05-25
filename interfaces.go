@@ -98,6 +98,8 @@ type MultimapTable interface {
 	Update(value, id interface{}, valuesToUpdate map[string]interface{}) Op
 	Delete(value, id interface{}) Op
 	DeleteAll(value interface{}) Op
+	// List populates the provided pointer to a slice with the results matching the keys provided.
+	// To disable the limit, set limit to 0
 	List(partitionKey, clusteringKey interface{}, limit int, pointerToASlice interface{}) Op
 	Read(partitionKey, clusteringKey, pointer interface{}) Op
 	WithOptions(Options) MultimapTable
@@ -112,6 +114,8 @@ type MultimapMkTable interface {
 	Update(v, id map[string]interface{}, valuesToUpdate map[string]interface{}) Op
 	Delete(v, id map[string]interface{}) Op
 	DeleteAll(v map[string]interface{}) Op
+	// List populates the provided pointer to a slice with the results matching the keys provided.
+	// To disable the limit, set limit to 0
 	List(v, startId map[string]interface{}, limit int, pointerToASlice interface{}) Op
 	Read(v, id map[string]interface{}, pointer interface{}) Op
 	MultiRead(v, id map[string]interface{}, pointerToASlice interface{}) Op
