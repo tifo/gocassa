@@ -862,3 +862,74 @@ func TestErrorInjectors(t *testing.T) {
 		}
 	})
 }
+
+func TestMockClusteringOrder(t *testing.T) {
+	type Thing struct {
+		ID      string
+		Created time.Time
+		Count   int
+	}
+
+	ctx := context.Background()
+
+	ks := NewMockKeySpace()
+	table := ks.Table("thing_table", Thing{}, Keys{
+		PartitionKeys: []string{
+			"ID",
+		},
+		ClusteringColumns: []string{
+			"Created", "Count",
+		},
+	}).WithOptions(Options{
+		ClusteringOrder: []ClusteringOrderColumn{
+			{
+				Direction: DESC,
+				Column:    "Created",
+			},
+			{
+				Direction: ASC,
+				Column:    "Count",
+			},
+		},
+	})
+
+	id := "1"
+	// things is in the correct order.
+	things := []Thing{
+		{
+			ID:      id,
+			Created: time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
+			Count:   1,
+		},
+		{
+			ID:      id,
+			Created: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			Count:   1,
+		},
+		{
+			ID:      id,
+			Created: time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC),
+			Count:   1,
+		},
+		{
+			ID:      id,
+			Created: time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC),
+			Count:   2,
+		},
+		{
+			ID:      id,
+			Created: time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC),
+			Count:   3,
+		},
+	}
+
+	for _, thing := range things {
+		err := table.Set(thing).RunWithContext(ctx)
+		require.NoError(t, err)
+	}
+
+	readThings := []Thing{}
+	err := table.Where(Eq("ID", id)).Read(&readThings).RunWithContext(ctx)
+	require.NoError(t, err)
+	require.Equal(t, things, readThings)
+}
