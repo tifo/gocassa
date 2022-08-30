@@ -18,6 +18,10 @@ var (
 	// cases where we have a null timestamp column. We've chosen the time
 	// 1753-01-01 which ironically is the minimum date in SQL Server
 	ClusteringSentinelTimestamp = time.Unix(-6847804725, 0)
+
+	// timeReflectType represents the reflect.Type of time.Time (putting
+	// this here allows us to optimise allocations)
+	timeReflectType = reflect.TypeOf(time.Time{})
 )
 
 // SelectStatement represents a read (SELECT) query for some data in C*
@@ -657,9 +661,8 @@ func IsClusteringSentinelValue(term interface{}) (bool, interface{}) {
 		}
 		return false, term
 	case val.Kind() == reflect.Struct:
-		timeTyp := reflect.TypeOf(time.Time{})
-		if val.Type().ConvertibleTo(timeTyp) {
-			convertedTerm := val.Convert(timeTyp).Interface().(time.Time)
+		if val.Type().ConvertibleTo(timeReflectType) {
+			convertedTerm := val.Convert(timeReflectType).Interface().(time.Time)
 			if convertedTerm.Equal(ClusteringSentinelTimestamp) {
 				return true, reflect.New(val.Type()).Elem().Interface()
 			}
