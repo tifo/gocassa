@@ -105,6 +105,10 @@ func j(s []string) string {
 	return strings.Join(s1, ", ")
 }
 
+type CQLTyper interface {
+	CQLType() gocql.Type
+}
+
 func cassaType(i interface{}) gocql.Type {
 	switch i.(type) {
 	case int, int32:
@@ -146,6 +150,11 @@ func cassaType(i interface{}) gocql.Type {
 		return gocql.TypeDouble
 	case reflect.Bool:
 		return gocql.TypeBoolean
+	}
+
+	// Check if the field implements the CQLTyper interface
+	if v, ok := i.(CQLTyper); ok {
+		return v.CQLType()
 	}
 
 	return gocql.TypeCustom
