@@ -514,6 +514,20 @@ func (s *MockSuite) TestNoop() {
 	s.Equal("Jill", users[1].Name)
 }
 
+// Don't panic when adding an empty Noop to an existing op chain
+func (s *MockSuite) TestEmptyNoop() {
+	addresses := s.insertAddresses()
+	addressToUpdate := addresses[0]
+	addressToUpdate.PostCode = "XYZ"
+	emptyNoop := Noop()
+	op := s.embMapTbl.Set(addressToUpdate)
+	op = op.Add(s.embTsTbl.Set(addressToUpdate))
+	s.NotPanics(func() {
+		op = op.Add(emptyNoop)
+	})
+	s.NoError(op.Run())
+}
+
 func (s *MockSuite) TestEmbedMapRead() {
 	expectedAddresses := s.insertAddresses()
 
