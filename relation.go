@@ -18,6 +18,12 @@ const (
 	CmpGreaterThanOrEquals                   // larger than or equal (foo >= 1)
 	CmpLesserThan                            // less than (foo < 1)
 	CmpLesserThanOrEquals                    // less than or equal (foo <= 1)
+
+	CmpTupleEquality            // direct tuple equality (tuple = (?, ?))
+	CmpTupleGreaterThan         // tuple larger than (tuple > (?,?))
+	CmpTupleGreaterThanOrEquals // tuple larger than or equal (tuple >= (?,?))
+	CmpTupleLesserThan          // tuple less than (tuple < (?,?))
+	CmpTupleLesserThanOrEquals  // tuple less than or equal (tuple <= (?,?))
 )
 
 // Relation describes the comparison of a field against a list of terms
@@ -162,5 +168,45 @@ func LTE(field string, term interface{}) Relation {
 		cmp:   CmpLesserThanOrEquals,
 		field: field,
 		terms: toI(term),
+	}
+}
+
+func TupleEq(field string, terms ...interface{}) Relation {
+	return Relation{
+		cmp:   CmpTupleEquality,
+		field: field,
+		terms: terms,
+	}
+}
+
+func TupleGT(field string, terms ...interface{}) Relation {
+	return Relation{
+		cmp:   CmpTupleGreaterThan,
+		field: field,
+		terms: terms,
+	}
+}
+
+func TupleGTE(field string, terms ...interface{}) Relation {
+	return Relation{
+		cmp:   CmpTupleGreaterThanOrEquals,
+		field: field,
+		terms: terms,
+	}
+}
+
+func TupleLT(field string, terms ...interface{}) Relation {
+	return Relation{
+		cmp:   CmpTupleLesserThan,
+		field: field,
+		terms: terms,
+	}
+}
+
+func TupleLTE(field string, terms ...interface{}) Relation {
+	return Relation{
+		cmp:   CmpTupleLesserThanOrEquals,
+		field: field,
+		terms: terms,
 	}
 }

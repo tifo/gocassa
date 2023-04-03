@@ -541,8 +541,8 @@ func (_ noOpStatement) Values() []interface{} { return []interface{}{} }
 
 // generateUpdateSetCQL takes in a field map and generates the comma separated
 // SET syntax. An expected output may be something like:
-// 	- "foo = ?", {1}
-// 	- "foo = ?, bar = ?", {1, 2}
+//   - "foo = ?", {1}
+//   - "foo = ?, bar = ?", {1, 2}
 func generateUpdateSetCQL(fm map[string]interface{}) (string, []interface{}) {
 	clauses, values := make([]string, 0, len(fm)), make([]interface{}, 0, len(fm))
 	for _, fieldName := range sortedKeys(fm) {
@@ -561,36 +561,46 @@ func generateUpdateSetCQL(fm map[string]interface{}) (string, []interface{}) {
 
 // generateWhereCQL takes a list of relations and generates the CQL for
 // a WHERE clause. An expected output may be something like:
-//	- "foo = ?", {1}
-//	- "foo = ? AND bar IN ?", {1, {"a", "b", "c"}}
+//   - "foo = ?", {1}
+//   - "foo = ? AND bar IN ?", {1, {"a", "b", "c"}}
 func generateWhereCQL(rs []Relation, keys Keys, clusteringSentinelsEnabled bool) (string, []interface{}) {
 	clauses, values := make([]string, 0, len(rs)), make([]interface{}, 0, len(rs))
 	for _, relation := range rs {
 		clause, bindValue := generateRelationCQL(relation, keys, clusteringSentinelsEnabled)
 		clauses = append(clauses, clause)
-		values = append(values, bindValue)
+		values = append(values, bindValue...)
 	}
 	return strings.Join(clauses, " AND "), values
 }
 
-func generateRelationCQL(rel Relation, keys Keys, clusteringSentinelsEnabled bool) (string, interface{}) {
+func generateRelationCQL(rel Relation, keys Keys, clusteringSentinelsEnabled bool) (string, []interface{}) {
 	field := strings.ToLower(rel.Field())
 	switch rel.Comparator() {
 	case CmpEquality:
 		if isClusteringKeyField(rel.Field(), keys) && clusteringSentinelsEnabled {
-			return field + " = ?", ClusteringFieldOrSentinel(rel.Terms()[0])
+			return field + " = ?", []interface{}{ClusteringFieldOrSentinel(rel.Terms()[0])}
 		}
-		return field + " = ?", rel.Terms()[0]
+		return field + " = ?", []interface{}{rel.Terms()[0]}
 	case CmpIn:
-		return field + " IN ?", rel.Terms()
+		return field + " IN ?", []interface{}{rel.Terms()}
 	case CmpGreaterThan:
-		return field + " > ?", rel.Terms()[0]
+		return field + " > ?", []interface{}{rel.Terms()[0]}
 	case CmpGreaterThanOrEquals:
-		return field + " >= ?", rel.Terms()[0]
+		return field + " >= ?", []interface{}{rel.Terms()[0]}
 	case CmpLesserThan:
-		return field + " < ?", rel.Terms()[0]
+		return field + " < ?", []interface{}{rel.Terms()[0]}
 	case CmpLesserThanOrEquals:
-		return field + " <= ?", rel.Terms()[0]
+		return field + " <= ?", []interface{}{rel.Terms()[0]}
+	case CmpTupleEquality:
+		return field + " = " + generateTupleCQLBind(rel), rel.Terms()
+	case CmpTupleGreaterThan:
+		return field + " > " + generateTupleCQLBind(rel), rel.Terms()
+	case CmpTupleGreaterThanOrEquals:
+		return field + " >= " + generateTupleCQLBind(rel), rel.Terms()
+	case CmpTupleLesserThan:
+		return field + " < " + generateTupleCQLBind(rel), rel.Terms()
+	case CmpTupleLesserThanOrEquals:
+		return field + " <= " + generateTupleCQLBind(rel), rel.Terms()
 	default:
 		// This represents an invalid Comparator and would only manifest
 		// if we've initialised a Relation incorrectly within this package
@@ -598,10 +608,19 @@ func generateRelationCQL(rel Relation, keys Keys, clusteringSentinelsEnabled boo
 	}
 }
 
+func generateTupleCQLBind(rel Relation) string {
+	binders := "("
+	for i := len(rel.Terms()) - 1; i > 0; i-- {
+		binders += "?,"
+	}
+	binders += "?)"
+	return binders
+}
+
 // generateOrderByCQL generates the CQL for the ORDER BY clause. An expected
 // output might look like:
-//	- foo ASC
-//  - foo ASC, bar DESC
+//   - foo ASC
+//   - foo ASC, bar DESC
 func generateOrderByCQL(order []ClusteringOrderColumn) string {
 	out := make([]string, 0, len(order))
 	for _, oc := range order {
