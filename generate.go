@@ -68,7 +68,7 @@ func createTableStmt(createStmt, keySpace, cf string, partitionKeys, colKeys []s
 	if len(order) > 0 {
 		orderStrs := make([]string, len(order))
 		for i, o := range order {
-			orderStrs[i] = fmt.Sprintf("%v %v", o.Column, o.Direction.String())
+			orderStrs[i] = fmt.Sprintf("%v %v", strings.ToLower(o.Column), o.Direction.String())
 		}
 		orderLine := fmt.Sprintf("WITH CLUSTERING ORDER BY (%v)", strings.Join(orderStrs, ", "))
 		lines = append(lines, orderLine)
